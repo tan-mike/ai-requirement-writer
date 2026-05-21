@@ -13,9 +13,12 @@ class StoreProjectRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'type' => ['required', Rule::in(['webapp', 'mobile', 'api', 'data', 'custom'])],
+            'type' => ['required', 'string'],
+            'repository_url' => ['nullable', 'url', 'required_without_all:repository_path,context_file'],
+            'repository_path' => ['nullable', 'string', 'required_without_all:repository_url,context_file'],
+            'context_file' => ['nullable', 'file', 'max:2048', 'mimes:txt,json,xml,md', 'required_without_all:repository_url,repository_path'],
             'template_id' => ['nullable', 'exists:templates,id'],
-            'mode' => ['nullable', Rule::in(['template', 'conversational'])],
+            'mode' => ['nullable', 'string'],
         ];
     }
 }

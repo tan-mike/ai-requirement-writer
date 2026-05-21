@@ -30,4 +30,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects/{project}/drafts', [RequirementDraftController::class, 'index']);
     Route::patch('/projects/{project}/drafts/{draft}', [RequirementDraftController::class, 'update']);
     Route::post('/projects/{project}/drafts/{draft}/approve', [RequirementDraftController::class, 'approve']);
+
+    // Chat
+    Route::get('/projects/{project}/messages', [\App\Http\Controllers\ChatController::class, 'index']);
+    Route::post('/projects/{project}/chat', [\App\Http\Controllers\ChatController::class, 'chat']);
 });

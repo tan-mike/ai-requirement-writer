@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Project;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class ProcessContextFileJob implements ShouldQueue
@@ -19,8 +20,8 @@ class ProcessContextFileJob implements ShouldQueue
     public function handle(): void
     {
         if (!Storage::exists($this->filePath)) {
-            \Illuminate\Support\Facades\Log::error("Context file not found at: {$this->filePath}");
-            $this->project->update(['status' => 'error']);
+            Log::error("Context file not found at: {$this->filePath}");
+            $this->project->update(['status' => Project::STATUS_FAILED]);
             return;
         }
 
@@ -28,7 +29,7 @@ class ProcessContextFileJob implements ShouldQueue
         
         $this->project->update([
             'architecture_summary' => $content,
-            'status' => 'ready',
+            'status' => Project::STATUS_READY,
         ]);
 
         Storage::delete($this->filePath);

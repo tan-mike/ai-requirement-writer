@@ -19,7 +19,7 @@ class ContextFileUploadTest extends TestCase
     {
         Storage::fake('local');
         $user = User::factory()->create();
-        $project = Project::factory()->create(['user_id' => $user->id, 'status' => 'processing']);
+        $project = Project::factory()->create(['user_id' => $user->id, 'status' => Project::STATUS_PROCESSING]);
         
         $content = "# Project Context\nThis is a test context.";
         $file = UploadedFile::fake()->createWithContent('context.md', $content);
@@ -30,7 +30,28 @@ class ContextFileUploadTest extends TestCase
 
         $project->refresh();
         $this->assertEquals($content, $project->architecture_summary);
-        $this->assertEquals('ready', $project->status);
+        $this->assertEquals(Project::STATUS_READY, $project->status);
         Storage::disk('local')->assertMissing($path);
+    }
+
+    public function test_user_can_create_project_with_context_file()
+    {
+        Storage::fake('local');
+        Queue::fake();
+        $user = User::factory()->create();
+        
+        $response = $this->actingAs($user)->postJson('/api/projects', [
+            'name' => 'File Project',
+            'type' => 'webapp',
+            'context_file' => UploadedFile::fake()->create('context.md', 100),
+        ]);
+
+        $response->assertStatus(201);
+        $project = Project::first();
+        $this->assertEquals('File Project', $project->name);
+        
+        Queue::assertPushed(ProcessContextFileJob::class, function ($job) use ($project) {
+            return $job->project->id === $project->id;
+        });
     }
 }

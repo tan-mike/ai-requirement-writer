@@ -19,9 +19,10 @@ class GenerationController extends Controller
         }
 
         $intake = $project->intake;
+        $chatHistory = $project->chatMessages()->orderBy('order')->get();
 
-        if (! $intake) {
-            abort(422, 'Project intake is missing.');
+        if (! $intake && $chatHistory->isEmpty()) {
+            abort(422, 'Project intake or chat history is missing.');
         }
 
         $draft = $project->drafts()->create([
@@ -30,10 +31,14 @@ class GenerationController extends Controller
             'content' => '',
         ]);
 
-        return response()->stream(function () use ($intake, $draft) {
+        return response()->stream(function () use ($intake, $chatHistory, $draft) {
             try {
                 $accumulated = '';
-                $this->gemini->streamBrd($intake->fields, function (string $chunk) use (&$accumulated) {
+                $context = $intake ? $intake->fields : [];
+                
+                // If we have chat history, we should prioritize it or combine it.
+                // For simplicity, we'll pass both to a modified streamBrd method.
+                $this->gemini->streamBrd($context, $chatHistory->toArray(), function (string $chunk) use (&$accumulated) {
                     $accumulated .= $chunk;
                     echo 'data: ' . json_encode(['text' => $chunk]) . "\n\n";
                     ob_flush();

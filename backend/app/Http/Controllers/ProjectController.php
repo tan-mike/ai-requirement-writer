@@ -18,7 +18,21 @@ class ProjectController extends Controller
 
     public function store(StoreProjectRequest $request): JsonResponse
     {
-        $project = $request->user()->projects()->create($request->validated());
+        $data = $request->validated();
+        $contextFile = $request->file('context_file');
+        
+        unset($data['context_file']);
+
+        $project = $request->user()->projects()->create($data);
+
+        if ($contextFile) {
+            $project->update(['status' => Project::STATUS_PROCESSING]);
+            $path = $contextFile->store('temp_context');
+            \App\Jobs\ProcessContextFileJob::dispatch($project, $path);
+        } elseif ($project->repository_url || $project->repository_path) {
+            $project->update(['status' => Project::STATUS_PROCESSING]);
+            \App\Jobs\ProcessRepositoryJob::dispatch($project);
+        }
 
         return response()->json(['data' => $project], 201);
     }

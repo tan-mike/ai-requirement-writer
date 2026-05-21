@@ -12,6 +12,11 @@ class Project extends Model
 {
     use HasFactory;
 
+    const STATUS_DRAFT = 'draft';
+    const STATUS_PROCESSING = 'processing';
+    const STATUS_READY = 'ready';
+    const STATUS_FAILED = 'failed';
+
     protected $fillable = [
         'user_id',
         'template_id',

@@ -29,6 +29,7 @@ class ProjectTest extends TestCase
                 'name' => 'My Web App',
                 'type' => 'webapp',
                 'template_id' => $template->id,
+                'repository_url' => 'https://github.com/example/repo',
             ]);
 
         $response->assertCreated()
