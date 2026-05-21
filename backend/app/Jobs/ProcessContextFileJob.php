@@ -19,19 +19,24 @@ class ProcessContextFileJob implements ShouldQueue
 
     public function handle(): void
     {
-        if (!Storage::exists($this->filePath)) {
-            Log::error("Context file not found at: {$this->filePath}");
+        try {
+            if (!Storage::exists($this->filePath)) {
+                Log::error("Context file not found at: {$this->filePath}");
+                $this->project->update(['status' => Project::STATUS_FAILED]);
+                return;
+            }
+
+            $content = Storage::get($this->filePath);
+            
+            $this->project->update([
+                'architecture_summary' => $content,
+                'status' => Project::STATUS_READY,
+            ]);
+
+            Storage::delete($this->filePath);
+        } catch (\Throwable $e) {
+            Log::error("Failed to process context file: " . $e->getMessage());
             $this->project->update(['status' => Project::STATUS_FAILED]);
-            return;
         }
-
-        $content = Storage::get($this->filePath);
-        
-        $this->project->update([
-            'architecture_summary' => $content,
-            'status' => Project::STATUS_READY,
-        ]);
-
-        Storage::delete($this->filePath);
     }
 }

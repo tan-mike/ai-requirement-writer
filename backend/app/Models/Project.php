@@ -15,7 +15,7 @@ class Project extends Model
     const STATUS_DRAFT = 'draft';
     const STATUS_PROCESSING = 'processing';
     const STATUS_READY = 'ready';
-    const STATUS_FAILED = 'failed';
+    const STATUS_FAILED = 'error';
 
     protected $fillable = [
         'user_id',
