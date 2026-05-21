@@ -12,7 +12,17 @@ class Project extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id', 'template_id', 'name', 'type', 'mode', 'status'];
+    protected $fillable = [
+        'user_id',
+        'template_id',
+        'name',
+        'type',
+        'mode',
+        'status',
+        'repository_url',
+        'repository_path',
+        'architecture_summary'
+    ];
 
     protected $attributes = [
         'mode' => 'template',
@@ -37,5 +47,10 @@ class Project extends Model
     public function drafts(): HasMany
     {
         return $this->hasMany(RequirementDraft::class);
+    }
+
+    public function chatMessages(): HasMany
+    {
+        return $this->hasMany(ChatMessage::class);
     }
 }
