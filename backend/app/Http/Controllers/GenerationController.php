@@ -18,6 +18,8 @@ class GenerationController extends Controller
             abort(403, 'Forbidden');
         }
 
+        set_time_limit(120);
+
         $intake = $project->intake;
         $chatHistory = $project->chatMessages()->orderBy('order')->get();
 
@@ -65,6 +67,8 @@ class GenerationController extends Controller
         if ($project->user_id !== $request->user()->id) {
             abort(403, 'Forbidden');
         }
+
+        set_time_limit(120);
 
         $request->validate([
             'brd_draft_id' => ['required', 'integer'],
@@ -116,6 +120,8 @@ class GenerationController extends Controller
         if ($project->user_id !== $request->user()->id) {
             abort(403, 'Forbidden');
         }
+
+        set_time_limit(120);
 
         $request->validate([
             'brd_draft_id' => ['required', 'integer'],

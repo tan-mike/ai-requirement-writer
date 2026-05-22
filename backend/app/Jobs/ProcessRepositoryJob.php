@@ -13,6 +13,8 @@ class ProcessRepositoryJob implements ShouldQueue
 {
     use Queueable;
 
+    public $timeout = 120;
+
     public function __construct(public Project $project)
     {
     }

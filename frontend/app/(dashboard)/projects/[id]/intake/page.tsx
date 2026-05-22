@@ -1,6 +1,7 @@
 'use client'
 import { use, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { apiClient } from '@/lib/api'
 
 interface TemplateField {
@@ -63,8 +64,13 @@ export default function IntakePage({ params }: { params: Promise<{ id: string }>
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-semibold mb-2">{project.name}</h1>
-      <p className="text-sm text-gray-500 mb-6">Fill in the project details to start generating requirements.</p>
+      <Link href="/dashboard" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition-colors mb-6 group w-fit">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 transition-transform group-hover:-translate-x-1"><path d="m15 18-6-6 6-6"/></svg>
+        Back to Dashboard
+      </Link>
+
+      <h1 className="text-3xl font-bold tracking-tight text-foreground">{project.name}</h1>
+      <p className="text-muted-foreground mt-2 mb-8">Fill in the project details to start generating requirements.</p>
       {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
       <form onSubmit={handleSubmit} className="space-y-5">
         {fields.map(field => (

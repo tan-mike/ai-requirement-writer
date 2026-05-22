@@ -30,6 +30,8 @@ class ChatController extends Controller
             abort(403, 'Forbidden');
         }
 
+        set_time_limit(120);
+
         $request->validate([
             'message' => ['required', 'string'],
         ]);

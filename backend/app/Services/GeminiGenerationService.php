@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Gemini\Data\Content;
+use Gemini\Enums\Role;
 use Gemini\Laravel\Facades\Gemini;
 
 class GeminiGenerationService
@@ -76,13 +77,32 @@ class GeminiGenerationService
         5. When requirements are clear (Problem, Audience, Constraints, Metrics), output exactly [READY_FOR_BRD] and nothing else.
         ";
 
-        // Convert array history to Gemini Content objects if needed, 
-        // but for now we'll assume a simpler implementation or handle it in streamGeneration.
-        // Actually, let's use a simplified version for this turn.
+        $historyCollection = collect($history);
+        
+        // The last message in history is the one we just saved (the user's latest input)
+        $lastMessage = $historyCollection->pop();
+        $lastText = $lastMessage['content'] ?? '';
 
-        $lastMessage = end($history)['content'] ?? '';
+        $chatHistory = $historyCollection->map(fn($msg) => 
+            Content::parse($msg['content'], $msg['role'] === 'assistant' ? Role::MODEL : Role::USER)
+        )->toArray();
 
-        $this->streamGeneration($systemPrompt, $lastMessage, $onChunk);
+        $chat = Gemini::generativeModel(model: $this->model)
+            ->withSystemInstruction(Content::parse($systemPrompt))
+            ->startChat(history: $chatHistory);
+
+        $stream = $chat->streamSendMessage($lastText);
+
+        foreach ($stream as $response) {
+            try {
+                $text = $response->text();
+                if ($text !== '') {
+                    $onChunk($text);
+                }
+            } catch (\ValueError $e) {
+                continue;
+            }
+        }
     }
 
     /**
