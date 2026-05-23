@@ -25,9 +25,35 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/projects/{project}/generate/brd', [GenerationController::class, 'brd']);
     Route::post('/projects/{project}/generate/stories', [GenerationController::class, 'stories']);
     Route::post('/projects/{project}/generate/spec', [GenerationController::class, 'spec']);
+    Route::post('/projects/{project}/drafts/{draft}/synthesize', [GenerationController::class, 'synthesize']);
+
+    // Contexts
+    Route::get('/contexts', [\App\Http\Controllers\ProjectContextController::class, 'index']);
+    Route::post('/contexts', [\App\Http\Controllers\ProjectContextController::class, 'store']);
+    Route::patch('/contexts/{context}', [\App\Http\Controllers\ProjectContextController::class, 'update']);
+    Route::delete('/contexts/{context}', [\App\Http\Controllers\ProjectContextController::class, 'destroy']);
+
+    // Personas
+    Route::get('/personas', function(\Illuminate\Http\Request $request) {
+        $query = \App\Models\Persona::where('is_active', true)->visibleTo($request->user()->id);
+        if ($request->has('role')) {
+            $query->where('role', $request->role);
+        }
+        return $query->get();
+    });
+
+    // Skill Management
+    Route::get('/user/skills', [\App\Http\Controllers\SkillController::class, 'index']);
+    Route::post('/user/skills/upload', [\App\Http\Controllers\SkillController::class, 'upload']);
+    Route::delete('/user/skills/{persona}', [\App\Http\Controllers\SkillController::class, 'destroy']);
+
+    // User Settings
+    Route::get('/user/settings', [\App\Http\Controllers\UserSettingsController::class, 'show']);
+    Route::patch('/user/settings', [\App\Http\Controllers\UserSettingsController::class, 'update']);
 
     // Drafts
     Route::get('/projects/{project}/drafts', [RequirementDraftController::class, 'index']);
+    Route::get('/projects/{project}/drafts/{draft}', [RequirementDraftController::class, 'show']);
     Route::patch('/projects/{project}/drafts/{draft}', [RequirementDraftController::class, 'update']);
     Route::post('/projects/{project}/drafts/{draft}/approve', [RequirementDraftController::class, 'approve']);
 

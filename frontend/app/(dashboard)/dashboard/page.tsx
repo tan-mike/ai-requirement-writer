@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api'
 import { ProjectCard } from '@/components/ProjectCard'
+import ProjectContextManager from '@/components/ProjectContextManager'
+import GuidedTour from '@/components/GuidedTour'
 
 interface Project {
   id: number; name: string; type: string; status: string; mode: string; created_at: string
@@ -26,7 +28,7 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Projects</h1>
           <p className="text-muted-foreground mt-1">Manage and view your requirement generation projects.</p>
         </div>
-        <Link href="/projects/new" className="btn-primary flex items-center gap-2">
+        <Link href="/projects/new" id="tour-new-project-btn" className="btn-primary flex items-center gap-2">
           <span>New project</span>
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
         </Link>
@@ -50,9 +52,30 @@ export default function DashboardPage() {
         </div>
       )}
       
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2 mb-12">
         {projects.map(p => <ProjectCard key={p.id} project={p} />)}
       </div>
+
+      <div id="tour-contexts-section">
+        <ProjectContextManager />
+      </div>
+
+      <GuidedTour 
+        pageKey="dashboard" 
+        mode="hotspots"
+        steps={[
+          {
+            targetId: "tour-new-project-btn",
+            title: "Start a Project",
+            content: "Click here to start discovering and generating high-quality requirements for your next feature."
+          },
+          {
+            targetId: "tour-contexts-section",
+            title: "Project Contexts",
+            content: "Manage reusable documentation and architecture files. These help the AI understand your existing systems."
+          }
+        ]} 
+      />
     </div>
   )
 }

@@ -45,11 +45,14 @@ class ChatController extends Controller
 
         $history = $project->chatMessages()->orderBy('order')->get()->toArray();
         $architectureSummary = $project->architecture_summary ?? 'No existing architecture information available.';
+        $systemPrompt = $project->leadPersona?->system_prompt ?? 'You are a Senior Technical Business Analyst and Principal Architect.';
 
-        return response()->stream(function () use ($project, $architectureSummary, $history) {
+        $this->gemini->forUser($request->user());
+
+        return response()->stream(function () use ($project, $systemPrompt, $architectureSummary, $history) {
             try {
                 $accumulated = '';
-                $this->gemini->streamDiscoveryChat($architectureSummary, $history, function (string $chunk) use (&$accumulated) {
+                $this->gemini->streamDiscoveryChat($systemPrompt, $architectureSummary, $history, function (string $chunk) use (&$accumulated) {
                     $accumulated .= $chunk;
                     echo 'data: ' . json_encode(['text' => $chunk]) . "\n\n";
                     ob_flush();

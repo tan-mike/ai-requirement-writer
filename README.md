@@ -5,9 +5,12 @@ Automated tool to generate Business Requirements Documents (BRD), User Stories, 
 ## Features
 
 - **Multi-Step Generation:** Guided flow from BRD → User Stories → Technical Spec.
+- **Flexible Context:** Start from scratch, upload files, or select from your library of reusable **Saved Contexts**.
 - **Template Mode:** Quick generation based on structured project intake forms.
 - **Conversational Mode (AI Interview):** A "Principal Architect" AI grills you to distill true business requirements.
 - **Codebase Awareness:** Connect GitHub or local repos. The AI analyzes your existing architecture to ensure new features maintain system integrity.
+- **Agentic Persona System:** Select specialized Lead personas (Fintech, Enterprise) and a Review Committee (Security, UX, Performance) for multi-agent refinement.
+- **Reusable Contexts:** Save and name technical context snippets for reuse across generations.
 - **Markdown Editor:** Review, edit, and version your requirement drafts.
 
 ---
@@ -40,8 +43,10 @@ Automated tool to generate Business Requirements Documents (BRD), User Stories, 
 5. `php artisan key:generate`
 6. `touch database/database.sqlite` (if using SQLite)
 7. `php artisan migrate --seed`
-8. **Run the Queue:** `php artisan queue:listen` (Required for repository analysis)
-9. **Start Server:** `php artisan serve` (Runs on `http://localhost:8000`)
+8. **Seed Personas:** `php artisan db:seed --class=PersonaSeeder`
+9. **Run the Queue:** `php artisan queue:listen --timeout=3600` (Required for repository analysis and agentic reviews).
+    *   *Scale:* You can safely run multiple queue workers in parallel to speed up multi-persona reviews; the system uses atomic database updates to prevent race conditions.
+10. **Start Server:** `php artisan serve` (Runs on `http://localhost:8000`)
 
 ### Frontend Setup
 

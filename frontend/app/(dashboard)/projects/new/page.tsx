@@ -3,38 +3,53 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api'
+import GuidedTour from '@/components/GuidedTour'
+import InfoTooltip from '@/components/InfoTooltip'
 
 interface Template { id: number; name: string; type: string }
+interface Persona { id: number; name: string; slug: string }
+interface ProjectContext { id: number; name: string }
 
 interface ProjectPayload {
   name: string
   type: string
   template_id: number
   mode: string
+  lead_persona_id: number
   repository_url?: string
   repository_path?: string
+  context_ids?: number[]
 }
 
 export default function NewProjectPage() {
   const router = useRouter()
   const [templates, setTemplates] = useState<Template[]>([])
+  const [personas, setPersonas] = useState<Persona[]>([])
+  const [savedContexts, setSavedContexts] = useState<ProjectContext[]>([])
   const [name, setName] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
+  const [selectedPersonaId, setSelectedPersonaId] = useState<number>(0)
   const [mode, setMode] = useState<'template' | 'conversational'>('template')
-  const [contextSource, setContextSource] = useState<'url' | 'path' | 'file' | 'none'>('none')
+  const [contextSource, setContextSource] = useState<'url' | 'path' | 'file' | 'saved' | 'none'>('none')
   const [repoUrl, setRepoUrl] = useState('')
   const [repoPath, setRepoPath] = useState('')
   const [contextFile, setContextFile] = useState<File | null>(null)
+  const [selectedContextIds, setSelectedContextIds] = useState<number[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     apiClient.get<{ data: Template[] }>('/templates').then(res => setTemplates(res.data)).catch(console.error)
+    apiClient.get<Persona[]>('/personas?role=lead').then(res => {
+      setPersonas(res)
+      if (res.length > 0) setSelectedPersonaId(res[0].id)
+    }).catch(console.error)
+    apiClient.get<ProjectContext[]>('/contexts').then(setSavedContexts).catch(console.error)
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name || !selectedTemplate) { setError('Select a template and enter a name'); return }
+    if (!name || !selectedTemplate || !selectedPersonaId) { setError('Select a template, lead expert, and enter a name'); return }
     setSubmitting(true)
     setError('')
 
@@ -44,16 +59,22 @@ export default function NewProjectPage() {
         type: selectedTemplate.type,
         template_id: selectedTemplate.id,
         mode,
+        lead_persona_id: selectedPersonaId,
       }
 
       if (contextSource === 'url') payload.repository_url = repoUrl
       if (contextSource === 'path') payload.repository_path = repoPath
+      if (contextSource === 'saved') payload.context_ids = selectedContextIds
       
       let body: ProjectPayload | FormData = payload
       if (contextSource === 'file' && contextFile) {
         const formData = new FormData()
         Object.entries(payload).forEach(([key, value]) => {
-          formData.append(key, String(value))
+          if (Array.isArray(value)) {
+            value.forEach(v => formData.append(`${key}[]`, String(v)))
+          } else {
+            formData.append(key, String(value))
+          }
         })
         formData.append('context_file', contextFile)
         body = formData
@@ -68,15 +89,21 @@ export default function NewProjectPage() {
     }
   }
 
+  const toggleContextId = (id: number) => {
+    setSelectedContextIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    )
+  }
+
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-3xl mx-auto">
       <Link href="/dashboard" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition-colors mb-6 group w-fit">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 transition-transform group-hover:-translate-x-1"><path d="m15 18-6-6 6-6"/></svg>
         Back to Dashboard
       </Link>
 
       <div className="card p-10">
-        <div className="mb-10">
+        <div className="mb-10 text-center">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">New project</h1>
           <p className="text-muted-foreground mt-2">Set up your project and choose how you want to discover requirements.</p>
         </div>
@@ -88,20 +115,36 @@ export default function NewProjectPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-10">
-          <div className="space-y-4">
-            <label htmlFor="project-name" className="block text-sm font-bold text-foreground uppercase tracking-wider">Project details</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-1">
-              <label htmlFor="project-name" className="text-xs font-medium text-muted-foreground mb-1.5 block">Name</label>
+              <label htmlFor="project-name" className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Project Name</label>
               <input id="project-name" type="text" value={name} onChange={e => setName(e.target.value)}
                 placeholder="e.g. Customer Portal" className="input text-base" required />
             </div>
+
+            <div className="space-y-1" id="tour-lead-persona">
+              <label htmlFor="lead-persona" className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Lead Expert Persona</label>
+              <select 
+                id="lead-persona"
+                value={selectedPersonaId}
+                onChange={e => setSelectedPersonaId(Number(e.target.value))}
+                className="w-full bg-surface border-2 border-border rounded-xl px-4 py-2.5 text-sm font-bold focus:border-primary transition-all outline-none"
+                required
+              >
+                {personas.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
           
-          <div className="space-y-4">
-            <label className="block text-sm font-bold text-foreground uppercase tracking-wider">Discovery Mode</label>
+          <div className="space-y-4" id="tour-discovery-mode">
+            <div className="flex items-center gap-2">
+              <label className="block text-sm font-bold text-foreground uppercase tracking-wider">Discovery Mode</label>
+              <InfoTooltip text="Template mode uses a structured form. Conversational mode uses an interactive AI interview to extract requirements." />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <button type="button" onClick={() => setMode('template')}
-                aria-pressed={mode === 'template'}
                 className={`p-4 rounded-xl text-left border-2 transition-all outline-none ${
                   mode === 'template' 
                     ? 'border-primary bg-primary/5 ring-1 ring-primary' 
@@ -118,7 +161,6 @@ export default function NewProjectPage() {
               </button>
               
               <button type="button" onClick={() => setMode('conversational')}
-                aria-pressed={mode === 'conversational'}
                 className={`p-4 rounded-xl text-left border-2 transition-all outline-none ${
                   mode === 'conversational' 
                     ? 'border-primary bg-primary/5 ring-1 ring-primary' 
@@ -141,7 +183,6 @@ export default function NewProjectPage() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {templates.map(t => (
                 <button key={t.id} type="button" onClick={() => setSelectedTemplate(t)}
-                  aria-pressed={selectedTemplate?.id === t.id}
                   className={`border-2 rounded-xl p-4 text-sm font-bold transition-all text-left outline-none ${
                     selectedTemplate?.id === t.id 
                       ? 'border-primary bg-primary/5 text-primary' 
@@ -153,27 +194,45 @@ export default function NewProjectPage() {
             </div>
           </div>
 
-          <div className="pt-8 border-t border-border space-y-6">
+          <div className="pt-8 border-t border-border space-y-6" id="tour-add-context">
             <div>
-              <label className="block text-sm font-bold text-foreground uppercase tracking-wider mb-4">Add Context (Optional)</label>
+              <div className="flex items-center gap-2 mb-4">
+                <label className="block text-sm font-bold text-foreground uppercase tracking-wider">Add Context (Optional)</label>
+                <InfoTooltip text="Provide your existing documentation or codebase for the AI to analyze. This helps maintain system integrity." />
+              </div>
               <div className="flex flex-wrap gap-2">
-                {(['none', 'url', 'path', 'file'] as const).map(s => (
+                {(['none', 'saved', 'url', 'path', 'file'] as const).map(s => (
                   <button key={s} type="button" onClick={() => setContextSource(s)}
-                    aria-pressed={contextSource === s}
                     className={`px-4 py-1.5 rounded-full text-xs font-bold border transition-all outline-none ${
                       contextSource === s 
                         ? 'bg-foreground text-background border-foreground shadow-lg shadow-foreground/10' 
                         : 'bg-surface text-muted border-border hover:border-muted-foreground/30'
                     }`}>
-                    {s === 'none' ? 'None' : s === 'url' ? 'GitHub URL' : s === 'path' ? 'Local Path' : 'File Upload'}
+                    {s === 'none' ? 'None' : s === 'saved' ? 'Saved Contexts' : s === 'url' ? 'GitHub URL' : s === 'path' ? 'Local Path' : 'File Upload'}
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="bg-surface-hover rounded-xl p-6 min-h-[100px] flex flex-col justify-center border border-border/50">
-              {contextSource === 'none' && <p className="text-sm text-muted-foreground text-center italic">No extra context will be provided.</p>}
+              {contextSource === 'none' && <p className="text-sm text-muted-foreground text-center italic">No extra context will be provided. Starting from scratch.</p>}
               
+              {contextSource === 'saved' && (
+                <div className="animate-in fade-in slide-in-from-top-1 duration-300">
+                  <p className="text-xs font-bold text-muted uppercase tracking-wider mb-3">Your Saved Contexts</p>
+                  <div className="grid gap-2 max-h-48 overflow-y-auto pr-2">
+                    {savedContexts.length > 0 ? savedContexts.map(ctx => (
+                      <label key={ctx.id} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-surface hover:bg-muted/50 cursor-pointer transition-colors">
+                        <input type="checkbox" checked={selectedContextIds.includes(ctx.id)} onChange={() => toggleContextId(ctx.id)} className="w-4 h-4 rounded text-primary focus:ring-primary border-input" />
+                        <span className="text-sm font-medium">{ctx.name}</span>
+                      </label>
+                    )) : (
+                      <p className="text-xs text-muted-foreground italic">No saved contexts found. Go to Dashboard to add some.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {contextSource === 'url' && (
                 <div className="animate-in fade-in slide-in-from-top-1 duration-300">
                   <label htmlFor="repo-url" className="block text-xs font-bold text-muted uppercase tracking-wider mb-2">GitHub Repository URL</label>
@@ -213,6 +272,28 @@ export default function NewProjectPage() {
           </div>
         </form>
       </div>
+
+      <GuidedTour 
+        pageKey="new_project" 
+        mode="sequential"
+        steps={[
+          {
+            targetId: "tour-lead-persona",
+            title: "Pick Your Partner",
+            content: "Select an expert (e.g., Fintech, Architect) to conduct your interview and draft your documents."
+          },
+          {
+            targetId: "tour-discovery-mode",
+            title: "Discovery Approach",
+            content: "Choose 'Template' for a structured form, or 'Conversational' to be interviewed by the AI."
+          },
+          {
+            targetId: "tour-add-context",
+            title: "System Awareness",
+            content: "Optionally select from your Saved Contexts, or provide GitHub/file links to inform the AI."
+          }
+        ]} 
+      />
     </div>
   )
 }

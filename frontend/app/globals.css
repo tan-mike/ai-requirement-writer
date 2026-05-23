@@ -118,3 +118,28 @@ body {
 .duration-500 { animation-duration: 500ms; }
 .duration-700 { animation-duration: 700ms; }
 .delay-100 { animation-delay: 100ms; }
+
+/* Prose/Markdown Overflow Fixes */
+.prose {
+  max-width: 100% !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+.prose pre {
+  white-space: pre-wrap !important;
+  word-break: break-all !important;
+  overflow-x: auto !important;
+}
+
+.prose code {
+  white-space: pre-wrap !important;
+  word-break: break-all !important;
+}
+
+.prose table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}

@@ -1,0 +1,84 @@
+# Technical Specification: Agentic Persona System
+
+## 1. System Overview
+Transitioning the AI Requirement Writer from a simple request/response LLM loop to an "Agentic Persona System." This system enables a hybrid approach: users can select specialized "Lead" personas for drafting and an optional "Committee" of reviewer personas for rigorous quality assurance. It includes considerations for long-running processes, reusable project contexts, and API rate limit management.
+
+## 2. Architecture
+
+### 2.1 Persona Management (Database)
+Personas will be stored in a database table to allow dynamic updates and additions without code changes.
+
+**`personas` Table Structure:**
+*   `id`: Primary key.
+*   `slug`: Unique identifier (e.g., `lead_fintech`, `reviewer_security`).
+*   `name`: Display name (e.g., "Fintech Specialist", "Security Auditor").
+*   `role`: `lead` (primary drafter) or `reviewer` (critique only).
+*   `system_prompt`: The specific behavioral mandate for the LLM.
+*   `cost_multiplier`: Float value representing the relative token/time cost.
+*   `is_active`: Boolean to enable/disable personas.
+
+### 2.2 Reusable Project Contexts
+Users often upload the same context files across multiple prompts/projects. We will allow users to upload, name, and save project contexts for reuse.
+
+**`project_contexts` Table Structure:**
+*   `id`: Primary key.
+*   `user_id`: Foreign key to users.
+*   `name`: Display name (e.g., "Legacy Architecture Docs").
+*   `content`: The text/extracted content or a reference to a stored file.
+*   `type`: e.g., 'file', 'text_snippet'.
+
+### 2.3 Execution Loop (The Committee Workflow)
+When reviewers are selected, generation shifts from a single pass to a multi-step orchestration:
+
+1.  **Drafting (Streaming):** The selected `Lead` persona generates the initial draft based on intake context and selected reusable project contexts. This is streamed to the UI.
+2.  **Review Phase (Parallel):** The initial draft is sent asynchronously to all selected `Reviewer` personas. They evaluate the draft against their specific system prompts and generate critique text.
+3.  **Synthesis (Streaming):** The backend aggregates the critiques. A final prompt is sent to the `Lead` persona containing the original draft and the committee's feedback, instructing it to rewrite and incorporate the feedback. This final version is streamed to the UI.
+
+### 2.4 Process Stability & Free-Tier Mode
+*   **Long-Running Processes:** Multi-agent reviews can take significant time. We will configure Laravel Queue workers with extended timeouts (e.g., `--timeout=3600`) and ensure PHP `set_time_limit(0)` is used where appropriate to prevent agents from being killed prematurely.
+*   **Free-Tier Mode Configuration:** A user-configurable setting to throttle or delay API requests. When enabled, the system will introduce intentional `sleep()` delays between agent requests or batch requests to avoid hitting "requests per minute" limits on free-tier LLM accounts.
+
+## 3. Data Models
+
+### 3.1 `RequirementDraft` Table Updates
+The existing drafts table needs to support the multi-step lifecycle and store intermediate data.
+
+*   `status`: enum (`drafting`, `reviewing`, `refining`, `approved`, `failed`).
+*   `lead_persona_id`: integer (foreign key to `personas`).
+*   `reviewer_persona_ids`: json (array of selected reviewer `personas.id`).
+*   `critiques`: json (nullable, stores the raw feedback from the committee keyed by reviewer ID).
+
+## 4. API Contracts
+
+### 4.1 Context Management Endpoints
+*   `GET /api/contexts`: List saved contexts.
+*   `POST /api/contexts`: Upload/save a new named context.
+
+### 4.2 Generation Endpoints (`POST /api/projects/{project}/drafts/{type}`)
+The generation endpoints must accept the persona configuration and selected contexts.
+*   **Payload:**
+    *   `lead_persona_id`: integer (required)
+    *   `reviewer_persona_ids`: array of integers (optional)
+    *   `context_ids`: array of integers (optional, reusable contexts)
+
+### 4.3 Status Endpoint (`GET /api/projects/{project}/drafts/{draft}`)
+To support UI transparency during the async phases, the endpoint must return the current `status` and any populated `critiques`.
+
+## 5. UI/UX Considerations
+
+### 5.1 Project Setup & Persona Selection
+*   **Context Manager:** UI to upload, name, and select previously saved project contexts.
+*   **Generation Strategy Panel:** 
+    *   Dropdown for selecting the Lead Drafter.
+    *   Multi-select checklist for the Review Committee.
+    *   **Dynamic Warnings:** Real-time feedback calculating the estimated time/token increase.
+    *   **Free-Tier Toggle:** A switch to enable "Free-Tier Mode" (slower execution to respect API limits).
+
+### 5.2 Transparency and State Management
+*   **Live Status Indicator:** Clear visual feedback of the current step in the execution loop (e.g., "Waiting for Security Auditor review...").
+*   **Critique Viewer:** A side panel or expandable section displaying the raw feedback generated by the committee.
+
+## 6. Implementation Notes
+*   **Job Queues:** The Review Phase must utilize Laravel Queues to handle the parallel LLM calls to prevent timeouts.
+*   **Streaming State:** The frontend must handle the transition between the first stream (initial draft), the waiting period (async review), and the second stream (final synthesis).
+*   **Token Limits:** Aggregating large drafts and multiple critiques into the Synthesis prompt must be monitored against Gemini's context window limits.

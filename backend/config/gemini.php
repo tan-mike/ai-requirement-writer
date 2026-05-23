@@ -36,4 +36,14 @@ return [
     */
 
     'request_timeout' => env('GEMINI_REQUEST_TIMEOUT', 120),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Platform Free Tier Mode
+    |--------------------------------------------------------------------------
+    |
+    | When set to true, the platform will introduce delays for requests
+    | using the global platform API key.
+    */
+    'platform_free_tier' => env('GEMINI_PLATFORM_FREE_TIER', false),
 ];

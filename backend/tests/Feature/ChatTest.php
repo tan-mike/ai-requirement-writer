@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Persona;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\GeminiGenerationService;
@@ -13,11 +14,18 @@ class ChatTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+    private Persona $persona;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->user = User::factory()->create();
+        $this->persona = Persona::create([
+            'slug' => 'test-lead',
+            'name' => 'Test Lead',
+            'role' => 'lead',
+            'system_prompt' => 'Test prompt',
+        ]);
     }
 
     public function test_can_list_chat_messages(): void
@@ -34,11 +42,15 @@ class ChatTest extends TestCase
 
     public function test_chat_streams_and_saves_messages(): void
     {
-        $project = Project::factory()->create(['user_id' => $this->user->id]);
+        $project = Project::factory()->create([
+            'user_id' => $this->user->id,
+            'lead_persona_id' => $this->persona->id,
+        ]);
 
         $mock = $this->mock(GeminiGenerationService::class);
+        $mock->shouldReceive('forUser')->andReturnSelf();
         $mock->shouldReceive('streamDiscoveryChat')
-            ->andReturnUsing(function ($summary, $history, callable $cb) {
+            ->andReturnUsing(function ($sp, $summary, $history, callable $cb) {
                 $cb('AI response');
             });
 
@@ -52,7 +64,7 @@ class ChatTest extends TestCase
         // Consume the stream to trigger the save
         ob_start();
         $response->baseResponse->sendContent();
-        ob_get_clean();
+        ob_end_clean();
         
         $this->assertDatabaseHas('chat_messages', [
             'project_id' => $project->id,
@@ -71,14 +83,16 @@ class ChatTest extends TestCase
     {
         $project = Project::factory()->create([
             'user_id' => $this->user->id,
+            'lead_persona_id' => $this->persona->id,
             'architecture_summary' => 'Existing Architecture Context',
         ]);
 
         $mock = $this->mock(GeminiGenerationService::class);
+        $mock->shouldReceive('forUser')->andReturnSelf();
         $mock->shouldReceive('streamDiscoveryChat')
-            ->withArgs(function ($summary, $history) {
+            ->withArgs(function ($sp, $summary, $history) {
                 return $summary === 'Existing Architecture Context';
-            }, \Mockery::any(), \Mockery::any())
+            }, \Mockery::any(), \Mockery::any(), \Mockery::any())
             ->andReturn(null);
 
         $this->actingAs($this->user)
@@ -89,18 +103,24 @@ class ChatTest extends TestCase
 
     public function test_brd_generation_uses_chat_history_context(): void
     {
-        $project = Project::factory()->create(['user_id' => $this->user->id]);
+        $project = Project::factory()->create([
+            'user_id' => $this->user->id,
+            'lead_persona_id' => $this->persona->id,
+        ]);
         $project->chatMessages()->create(['role' => 'user', 'content' => 'Discovery info', 'order' => 1]);
 
         $mock = $this->mock(GeminiGenerationService::class);
+        $mock->shouldReceive('forUser')->andReturnSelf();
         $mock->shouldReceive('streamBrd')
-            ->withArgs(function ($fields, $chatHistory) {
+            ->withArgs(function ($sp, $fields, $chatHistory, $ctx) {
                 return count($chatHistory) === 1 && $chatHistory[0]['content'] === 'Discovery info';
-            }, \Mockery::any())
+            }, \Mockery::any(), \Mockery::any(), \Mockery::any(), \Mockery::any(), \Mockery::any())
             ->andReturn(null);
 
         $this->actingAs($this->user)
-            ->postJson("/api/projects/{$project->id}/generate/brd")
+            ->postJson("/api/projects/{$project->id}/generate/brd", [
+                'reviewer_persona_ids' => [],
+            ])
             ->assertOk();
     }
 }

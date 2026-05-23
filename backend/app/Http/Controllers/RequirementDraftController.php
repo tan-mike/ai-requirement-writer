@@ -20,6 +20,19 @@ class RequirementDraftController extends Controller
         return response()->json(['data' => $drafts]);
     }
 
+    public function show(Request $request, Project $project, RequirementDraft $draft): JsonResponse
+    {
+        if ($project->user_id !== $request->user()->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if ($draft->project_id !== $project->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        return response()->json(['data' => $draft]);
+    }
+
     public function update(Request $request, Project $project, RequirementDraft $draft): JsonResponse
     {
         if ($project->user_id !== $request->user()->id) {

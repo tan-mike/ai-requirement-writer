@@ -2,42 +2,131 @@
 
 namespace App\Services;
 
+use App\Models\User;
+use Gemini\Client;
 use Gemini\Data\Content;
 use Gemini\Enums\Role;
 use Gemini\Laravel\Facades\Gemini;
+use Illuminate\Support\Facades\Log;
 
 class GeminiGenerationService
 {
     private string $model = 'gemma-4-26b-a4b-it';
+    private ?User $currentUser = null;
+    private ?Client $customClient = null;
+    private bool $effectiveFreeTier = false;
+
+    /**
+     * Configure the service for a specific user context.
+     */
+    public function forUser(?User $user): self
+    {
+        $this->currentUser = $user;
+        $this->customClient = null;
+        $this->effectiveFreeTier = (bool) config('gemini.platform_free_tier', false);
+
+        if ($user) {
+            if ($user->gemini_api_key) {
+                // Initialize custom client with user's personal key
+                $this->customClient = \Gemini::factory()
+                    ->withApiKey($user->gemini_api_key)
+                    ->withHttpHeader('Accept', 'application/json')
+                    ->make();
+                
+                // Use user's personal free-tier setting for their own key
+                $this->effectiveFreeTier = (bool) $user->free_tier;
+            } else {
+                // Use platform key with platform free-tier setting
+                $this->effectiveFreeTier = (bool) config('gemini.platform_free_tier', false);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * Get the active client (custom or platform default).
+     */
+    private function getClient(): mixed
+    {
+        return $this->customClient ?? Gemini::getFacadeRoot();
+    }
+
+    /**
+     * Set the model to be used for generation.
+     */
+    public function setModel(string $model): self
+    {
+        $this->model = $model;
+        return $this;
+    }
 
     /**
      * Stream BRD generation from intake fields and/or chat history.
-     *
-     * @param  array<string, mixed>  $intakeFields
-     * @param  array<int, mixed>  $chatHistory
      */
-    public function streamBrd(array $intakeFields, array $chatHistory, callable $onChunk): void
+    public function streamBrd(string $systemPrompt, array $intakeFields, array $chatHistory, array $additionalContexts, callable $onChunk): void
     {
-        $prompt = $this->buildBrdPrompt($intakeFields, $chatHistory);
-        $this->streamGeneration($this->brdSystemPrompt(), $prompt, $onChunk);
+        $prompt = $this->buildBrdPrompt($intakeFields, $chatHistory, $additionalContexts);
+        $this->streamGeneration($systemPrompt, $prompt, $onChunk);
     }
 
     /**
      * Stream User Stories generation from an approved BRD.
      */
-    public function streamStories(string $approvedBrd, callable $onChunk): void
+    public function streamStories(string $systemPrompt, string $approvedBrd, array $additionalContexts, callable $onChunk): void
     {
-        $prompt = $this->buildStoriesPrompt($approvedBrd);
-        $this->streamGeneration($this->storiesSystemPrompt(), $prompt, $onChunk);
+        $prompt = $this->buildStoriesPrompt($approvedBrd, $additionalContexts);
+        $this->streamGeneration($systemPrompt, $prompt, $onChunk);
     }
 
     /**
      * Stream Technical Specification generation from an approved BRD and approved stories.
      */
-    public function streamSpec(string $approvedBrd, string $approvedStories, callable $onChunk): void
+    public function streamSpec(string $systemPrompt, string $approvedBrd, string $approvedStories, array $additionalContexts, callable $onChunk): void
     {
-        $prompt = $this->buildSpecPrompt($approvedBrd, $approvedStories);
-        $this->streamGeneration($this->specSystemPrompt(), $prompt, $onChunk);
+        $prompt = $this->buildSpecPrompt($approvedBrd, $approvedStories, $additionalContexts);
+        $this->streamGeneration($systemPrompt, $prompt, $onChunk);
+    }
+
+    /**
+     * Generate a critique from a draft using a reviewer persona.
+     */
+    public function generateCritique(string $systemPrompt, string $draftContent): string
+    {
+        $prompt = "Please review the following document and provide a detailed, actionable critique based on your expertise.\n\nDOCUMENT CONTENT:\n{$draftContent}";
+
+        if ($this->effectiveFreeTier) {
+            sleep(2); // Throttling for free tier
+        }
+
+        $response = $this->getClient()->generativeModel(model: $this->model)
+            ->withSystemInstruction(Content::parse($systemPrompt))
+            ->generateContent($prompt);
+
+        return $this->safeExtractText($response);
+    }
+
+    /**
+     * Stream a synthesis of the original draft and committee critiques.
+     */
+    public function streamSynthesis(string $systemPrompt, string $originalDraft, array $critiques, callable $onChunk): void
+    {
+        $formattedCritiques = collect($critiques)
+            ->map(fn($critique, $role) => "### Feedback from {$role}:\n{$critique}")
+            ->implode("\n\n");
+
+        $prompt = "You previously generated a draft. A committee of experts has reviewed it and provided feedback. 
+        Please rewrite the draft, incorporating ALL the feedback below to create a high-quality, final version.
+        
+        ORIGINAL DRAFT:
+        {$originalDraft}
+        
+        COMMITTEE FEEDBACK:
+        {$formattedCritiques}
+        
+        REWRITE THE ENTIRE DOCUMENT NOW:";
+
+        $this->streamGeneration($systemPrompt, $prompt, $onChunk);
     }
 
     /**
@@ -51,25 +140,24 @@ class GeminiGenerationService
         CODEBASE CONTEXT:
         {$codebaseContext}";
 
-        $response = Gemini::generativeModel(model: $this->model)
+        $response = $this->getClient()->generativeModel(model: $this->model)
             ->withSystemInstruction(Content::parse('You are a Principal Architect. Provide a concise, professional architecture summary in markdown.'))
             ->generateContent($prompt);
 
-        return $response->text();
+        return $this->safeExtractText($response);
     }
 
     /**
      * Stream Discovery Chat (The Challenger).
      */
-    public function streamDiscoveryChat(string $architectureSummary, array $history, callable $onChunk): void
+    public function streamDiscoveryChat(string $systemPrompt, string $architectureSummary, array $history, callable $onChunk): void
     {
-        $systemPrompt = "You are a Senior Technical Business Analyst and Principal Architect. 
-        Your goal is to 'grill' the user to distill true business requirements.
+        $rules = "
         
         EXISTING ARCHITECTURE:
         {$architectureSummary}
         
-        RULES:
+        INTERVIEW RULES:
         1. Ask ONE question at a time.
         2. Challenge 'Why' behind features.
         3. Protect the integrity of the existing architecture.
@@ -77,9 +165,9 @@ class GeminiGenerationService
         5. When requirements are clear (Problem, Audience, Constraints, Metrics), output exactly [READY_FOR_BRD] and nothing else.
         ";
 
+        $fullSystemPrompt = $systemPrompt . $rules;
+
         $historyCollection = collect($history);
-        
-        // The last message in history is the one we just saved (the user's latest input)
         $lastMessage = $historyCollection->pop();
         $lastText = $lastMessage['content'] ?? '';
 
@@ -87,40 +175,14 @@ class GeminiGenerationService
             Content::parse($msg['content'], $msg['role'] === 'assistant' ? Role::MODEL : Role::USER)
         )->toArray();
 
-        $chat = Gemini::generativeModel(model: $this->model)
-            ->withSystemInstruction(Content::parse($systemPrompt))
+        $chat = $this->getClient()->generativeModel(model: $this->model)
+            ->withSystemInstruction(Content::parse($fullSystemPrompt))
             ->startChat(history: $chatHistory);
 
         $stream = $chat->streamSendMessage($lastText);
 
         foreach ($stream as $response) {
-            try {
-                $text = $response->text();
-                if ($text !== '') {
-                    $onChunk($text);
-                }
-            } catch (\ValueError $e) {
-                continue;
-            }
-        }
-    }
-
-    /**
-     * Run a single streaming generation call, invoking $onChunk for each non-empty text chunk.
-     */
-    private function streamGeneration(string $systemPrompt, string $userPrompt, callable $onChunk): void
-    {
-        $stream = Gemini::generativeModel(model: $this->model)
-            ->withSystemInstruction(Content::parse($systemPrompt))
-            ->streamGenerateContent($userPrompt);
-
-        foreach ($stream as $response) {
-            try {
-                $text = $response->text();
-            } catch (\ValueError $e) {
-                \Illuminate\Support\Facades\Log::warning('Gemini stream chunk skipped: ' . $e->getMessage());
-                continue;
-            }
+            $text = $this->safeExtractText($response);
             if ($text !== '') {
                 $onChunk($text);
             }
@@ -128,54 +190,127 @@ class GeminiGenerationService
     }
 
     /**
-     * @param  array<string, mixed>  $fields
-     * @param  array<int, mixed>  $chatHistory
+     * Run a single streaming generation call, invoking $onChunk for each non-empty text chunk.
+     * Includes logic to strip preamble by anchoring to the first markdown heading.
      */
-    private function buildBrdPrompt(array $fields, array $chatHistory = []): string
+    private function streamGeneration(string $systemPrompt, string $userPrompt, callable $onChunk): void
     {
-        $formattedFields = collect($fields)
-            ->map(fn($value, $key) => '**' . $key . '**: ' . (is_array($value) ? implode(', ', $value) : (string) $value))
-            ->implode("\n");
+        if ($this->effectiveFreeTier) {
+            sleep(1); // Throttling for free tier start
+        }
 
-        $formattedChat = collect($chatHistory)
-            ->map(fn($msg) => ucfirst($msg['role']) . ': ' . $msg['content'])
-            ->implode("\n");
+        $stream = $this->getClient()->generativeModel(model: $this->model)
+            ->withSystemInstruction(Content::parse($systemPrompt))
+            ->streamGenerateContent($userPrompt);
 
+        $buffer = '';
+        $headingFound = false;
+
+        foreach ($stream as $response) {
+            $text = $this->safeExtractText($response);
+            
+            if ($text !== '') {
+                if (!$headingFound) {
+                    $buffer .= $text;
+                    
+                    // Look for the first markdown heading
+                    if (preg_match('/^(.*?)((?:^|\n)#+ \s+)/s', $buffer, $matches)) {
+                        $headingFound = true;
+                        $cleanText = str_replace($matches[1], '', $buffer);
+                        $onChunk($cleanText);
+                        $buffer = '';
+                    } elseif (strlen($buffer) > 500) {
+                        // Failsafe: if no heading found in 500 chars, assume no preamble or no headings
+                        $headingFound = true;
+                        $onChunk($buffer);
+                        $buffer = '';
+                    }
+                } else {
+                    $onChunk($text);
+                }
+
+                if ($this->effectiveFreeTier) {
+                    usleep(100000); // 100ms delay between chunks in free tier
+                }
+            }
+        }
+    }
+
+    /**
+     * Safely extract text from a Gemini response, handling multi-part content.
+     */
+    private function safeExtractText(mixed $response): string
+    {
+        try {
+            // Try the quick accessor first
+            return $response->text();
+        } catch (\ValueError $e) {
+            // Fallback to aggregating all parts if it's a multi-part response
+            $text = '';
+            foreach ($response->candidates as $candidate) {
+                foreach ($candidate->content->parts as $part) {
+                    if (isset($part->text)) {
+                        $text .= $part->text;
+                    }
+                }
+            }
+            return $text;
+        }
+    }
+
+    private function buildBrdPrompt(array $fields, array $chatHistory = [], array $additionalContexts = []): string
+    {
         $prompt = "Generate a Business Requirements Document (BRD).\n\n";
 
-        if ($formattedFields) {
+        if (!empty($fields)) {
+            $formattedFields = collect($fields)
+                ->map(fn($value, $key) => '**' . $key . '**: ' . (is_array($value) ? implode(', ', $value) : (string) $value))
+                ->implode("\n");
             $prompt .= "### Project Intake Form:\n{$formattedFields}\n\n";
         }
 
-        if ($formattedChat) {
+        if (!empty($chatHistory)) {
+            $formattedChat = collect($chatHistory)
+                ->map(fn($msg) => ucfirst($msg['role']) . ': ' . $msg['content'])
+                ->implode("\n");
             $prompt .= "### Discovery Interview Transcript:\n{$formattedChat}\n\n";
+        }
+
+        if (!empty($additionalContexts)) {
+            $formattedContexts = collect($additionalContexts)
+                ->map(fn($ctx) => "#### {$ctx['name']}:\n{$ctx['content']}")
+                ->implode("\n\n");
+            $prompt .= "### Additional Contexts:\n{$formattedContexts}\n\n";
         }
 
         return $prompt;
     }
 
-    private function buildStoriesPrompt(string $brd): string
+    private function buildStoriesPrompt(string $brd, array $additionalContexts = []): string
     {
-        return "Based on the following BRD, generate a prioritized list of User Stories with acceptance criteria:\n\n{$brd}";
+        $prompt = "Based on the following BRD, generate a prioritized list of User Stories with acceptance criteria:\n\n{$brd}";
+        
+        if (!empty($additionalContexts)) {
+            $formattedContexts = collect($additionalContexts)
+                ->map(fn($ctx) => "#### {$ctx['name']}:\n{$ctx['content']}")
+                ->implode("\n\n");
+            $prompt .= "\n\n### Additional Contexts:\n{$formattedContexts}";
+        }
+
+        return $prompt;
     }
 
-    private function buildSpecPrompt(string $brd, string $stories): string
+    private function buildSpecPrompt(string $brd, string $stories, array $additionalContexts = []): string
     {
-        return "Based on the following BRD and User Stories, generate a Technical Specification:\n\n## BRD\n{$brd}\n\n## User Stories\n{$stories}";
-    }
+        $prompt = "Based on the following BRD and User Stories, generate a Technical Specification:\n\n## BRD\n{$brd}\n\n## User Stories\n{$stories}";
+        
+        if (!empty($additionalContexts)) {
+            $formattedContexts = collect($additionalContexts)
+                ->map(fn($ctx) => "#### {$ctx['name']}:\n{$ctx['content']}")
+                ->implode("\n\n");
+            $prompt .= "\n\n### Additional Contexts:\n{$formattedContexts}";
+        }
 
-    private function brdSystemPrompt(): string
-    {
-        return 'You are a senior business analyst. Write structured, professional Business Requirements Documents in markdown. Include: Executive Summary, Problem Statement, Goals & Objectives, Stakeholders, Functional Requirements, Non-Functional Requirements, Constraints, and Success Criteria.';
-    }
-
-    private function storiesSystemPrompt(): string
-    {
-        return "You are a senior product manager. Write clear, testable User Stories in the format 'As a [user], I want [goal] so that [benefit]'. Include acceptance criteria for each story. Group stories by epic. Prioritize by business value (Must Have, Should Have, Could Have).";
-    }
-
-    private function specSystemPrompt(): string
-    {
-        return 'You are a senior software architect. Write comprehensive Technical Specifications in markdown. Include: System Overview, Architecture, Data Models, API Contracts, Security Considerations, Performance Requirements, and Implementation Notes.';
+        return $prompt;
     }
 }

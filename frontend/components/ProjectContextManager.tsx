@@ -1,0 +1,232 @@
+'use client'
+import { useState, useEffect } from 'react'
+import { apiClient } from '@/lib/api'
+
+interface ProjectContext {
+  id: number
+  name: string
+  content: string
+  type: string
+  created_at: string
+}
+
+export default function ProjectContextManager() {
+  const [contexts, setContexts] = useState<ProjectContext[]>([])
+  const [loading, setLoading] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newContent, setNewContent] = useState('')
+  const [newFile, setNewFile] = useState<File | null>(null)
+  const [createMode, setCreateMode] = useState<'text' | 'file'>('text')
+  const [showAdd, setShowAdd] = useState(false)
+  
+  // Edit State
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editContent, setEditContent] = useState('')
+
+  const loadContexts = async () => {
+    const data = await apiClient.get<ProjectContext[]>('/contexts')
+    setContexts(data)
+  }
+
+  useEffect(() => { loadContexts() }, [])
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      if (createMode === 'file' && newFile) {
+        const formData = new FormData()
+        formData.append('name', newName)
+        formData.append('file', newFile)
+        // Note: Using fetch directly for FormData to avoid complex apiClient configuration
+        const token = localStorage.getItem('token')
+        const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api'
+        await fetch(`${BASE_URL}/contexts`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        })
+      } else {
+        await apiClient.post('/contexts', { name: newName, content: newContent })
+      }
+      
+      setNewName('')
+      setNewContent('')
+      setNewFile(null)
+      setShowAdd(false)
+      await loadContexts()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdate = async (id: number) => {
+    setLoading(true)
+    try {
+      await apiClient.patch(`/contexts/${id}`, { content: editContent })
+      setEditingId(null)
+      await loadContexts()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this context?')) return
+    await apiClient.delete(`/contexts/${id}`)
+    await loadContexts()
+  }
+
+  const startEditing = (ctx: ProjectContext) => {
+    setEditingId(ctx.id)
+    setEditContent(ctx.content)
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold">Project Contexts</h2>
+        <button 
+          onClick={() => setShowAdd(!showAdd)}
+          className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 transition-colors"
+        >
+          {showAdd ? 'Cancel' : 'Add New Context'}
+        </button>
+      </div>
+
+      {showAdd && (
+        <form onSubmit={handleAdd} className="bg-card border border-border rounded-lg p-6 space-y-4 animate-in fade-in slide-in-from-top-4">
+          <div className="flex gap-2 p-1 bg-muted rounded-lg w-fit">
+            <button 
+              type="button"
+              onClick={() => setCreateMode('text')}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${createMode === 'text' ? 'bg-surface shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              Manual Entry
+            </button>
+            <button 
+              type="button"
+              onClick={() => setCreateMode('file')}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${createMode === 'file' ? 'bg-surface shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              File Upload
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Context Name</label>
+            <input 
+              required
+              className="input text-sm"
+              placeholder="e.g. Legacy API Documentation"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+            />
+          </div>
+
+          {createMode === 'text' ? (
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Content / Notes</label>
+              <textarea 
+                required
+                rows={6}
+                className="w-full bg-background border border-input rounded-xl px-3 py-3 text-sm font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                placeholder="Paste relevant technical context here..."
+                value={newContent}
+                onChange={e => setNewContent(e.target.value)}
+              />
+            </div>
+          ) : (
+            <div className="border-2 border-dashed border-border rounded-xl p-8 text-center bg-muted/20">
+              <input 
+                type="file"
+                required
+                accept=".txt,.md,.json,.csv,.xml"
+                onChange={e => setNewFile(e.target.files?.[0] || null)}
+                className="hidden"
+                id="context-file-upload"
+              />
+              <label htmlFor="context-file-upload" className="cursor-pointer space-y-2 block">
+                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                </div>
+                <div className="text-sm font-bold text-foreground">
+                  {newFile ? newFile.name : 'Click to select file'}
+                </div>
+                <p className="text-xs text-muted-foreground">Supports .txt, .md, .json, .csv (Max 2MB)</p>
+              </label>
+            </div>
+          )}
+
+          <button 
+            type="submit" 
+            disabled={loading || (createMode === 'file' && !newFile)}
+            className="btn-primary w-full py-3 shadow-lg shadow-primary/20 disabled:opacity-50"
+          >
+            {loading ? 'Processing...' : 'Save Context'}
+          </button>
+        </form>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {contexts.map(ctx => (
+          <div key={ctx.id} className="border border-border rounded-xl p-5 bg-card hover:shadow-md transition-shadow group relative">
+            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button 
+                onClick={() => startEditing(ctx)}
+                className="text-muted-foreground hover:text-blue-600 p-1 rounded hover:bg-muted"
+                title="Edit"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button 
+                onClick={() => handleDelete(ctx.id)}
+                className="text-muted-foreground hover:text-red-600 p-1 rounded hover:bg-muted"
+                title="Delete"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+              </button>
+            </div>
+            <h3 className="font-bold mb-1 pr-16">{ctx.name}</h3>
+            <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground mb-4">Added {new Date(ctx.created_at).toLocaleDateString()}</p>
+            
+            {editingId === ctx.id ? (
+              <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                <textarea 
+                  className="w-full bg-background border border-input rounded-lg px-3 py-3 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                  rows={8}
+                  value={editContent}
+                  onChange={e => setEditContent(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => handleUpdate(ctx.id)}
+                    disabled={loading}
+                    className="bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                  <button 
+                    onClick={() => setEditingId(null)}
+                    className="bg-muted text-muted-foreground px-3 py-1.5 rounded text-xs font-bold hover:bg-muted-foreground hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground bg-surface-hover/50 p-3 rounded-lg line-clamp-4 font-mono leading-relaxed border border-border/50">
+                {ctx.content}
+              </div>
+            )}
+          </div>
+        ))}
+        {contexts.length === 0 && !showAdd && (
+          <div className="col-span-full py-12 text-center border-2 border-dashed border-border rounded-2xl">
+            <p className="text-muted-foreground italic">No project contexts saved yet.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -26,7 +27,8 @@ class Project extends Model
         'status',
         'repository_url',
         'repository_path',
-        'architecture_summary'
+        'architecture_summary',
+        'lead_persona_id'
     ];
 
     protected $attributes = [
@@ -37,6 +39,11 @@ class Project extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function leadPersona(): BelongsTo
+    {
+        return $this->belongsTo(Persona::class, 'lead_persona_id');
     }
 
     public function template(): BelongsTo
@@ -57,5 +64,10 @@ class Project extends Model
     public function chatMessages(): HasMany
     {
         return $this->hasMany(ChatMessage::class);
+    }
+
+    public function projectContexts(): BelongsToMany
+    {
+        return $this->belongsToMany(ProjectContext::class, 'project_project_context');
     }
 }

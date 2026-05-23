@@ -45,7 +45,7 @@ export default function DraftEditor({ projectId, draft, onApproved }: Props) {
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
           Approved Requirement Draft
         </div>
-        <div className="prose prose-sm dark:prose-invert max-w-none bg-surface/50 p-6 rounded-xl border border-emerald-200/50 dark:border-emerald-800/50 shadow-inner">
+        <div className="prose prose-sm dark:prose-invert max-w-none break-words break-all bg-surface/50 p-6 rounded-xl border border-emerald-200/50 dark:border-emerald-800/50 shadow-inner">
           <ReactMarkdown>{content}</ReactMarkdown>
         </div>
       </div>
@@ -65,7 +65,7 @@ export default function DraftEditor({ projectId, draft, onApproved }: Props) {
           value={content}
           onChange={e => setContent(e.target.value)}
           rows={15}
-          className="w-full bg-surface-hover/30 border border-border rounded-xl px-4 py-4 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all leading-relaxed"
+          className="w-full max-w-full bg-surface-hover/30 border border-border rounded-xl px-4 py-4 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all leading-relaxed"
           placeholder="Requirement content..."
         />
         <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">

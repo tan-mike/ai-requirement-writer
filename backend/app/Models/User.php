@@ -12,8 +12,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'role'])]
-#[Hidden(['password', 'remember_token'])]
+#[Fillable(['name', 'email', 'password', 'role', 'free_tier', 'gemini_api_key', 'tour_flags'])]
+#[Hidden(['password', 'remember_token', 'gemini_api_key'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -38,11 +38,24 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'free_tier' => 'boolean',
+            'gemini_api_key' => 'encrypted',
+            'tour_flags' => 'array',
         ];
     }
 
     public function projects(): HasMany
     {
         return $this->hasMany(Project::class);
+    }
+
+    public function projectContexts(): HasMany
+    {
+        return $this->hasMany(ProjectContext::class);
+    }
+
+    public function personas(): HasMany
+    {
+        return $this->hasMany(Persona::class);
     }
 }

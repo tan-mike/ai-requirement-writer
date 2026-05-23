@@ -37,6 +37,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 >
                   Projects
                 </Link>
+                <Link 
+                  href="/settings" 
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    pathname === '/settings' 
+                      ? 'text-primary bg-primary/5' 
+                      : 'text-muted hover:text-foreground hover:bg-surface-hover'
+                  }`}
+                >
+                  Settings
+                </Link>
               </div>
             </div>
             <div className="flex items-center gap-6">

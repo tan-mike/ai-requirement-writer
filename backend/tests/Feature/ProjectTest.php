@@ -23,12 +23,14 @@ class ProjectTest extends TestCase
     public function test_user_can_create_a_project(): void
     {
         $template = Template::factory()->create(['type' => 'webapp']);
+        $persona = \App\Models\Persona::create(['slug' => 'test', 'name' => 'Test', 'role' => 'lead', 'system_prompt' => '...']);
 
         $response = $this->actingAs($this->user)
             ->postJson('/api/projects', [
                 'name' => 'My Web App',
                 'type' => 'webapp',
                 'template_id' => $template->id,
+                'lead_persona_id' => $persona->id,
                 'repository_url' => 'https://github.com/example/repo',
             ]);
 

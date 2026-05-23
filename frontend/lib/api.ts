@@ -44,6 +44,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     }
 
     if (!res.ok) {
+      if (res.status === 401) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+          window.location.href = '/login'
+        }
+      }
       // Extract Laravel validation errors if present
       let message = data.message || `Request failed with status ${res.status}`
       if (data.errors) {

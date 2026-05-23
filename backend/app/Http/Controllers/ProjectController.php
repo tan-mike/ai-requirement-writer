@@ -20,10 +20,16 @@ class ProjectController extends Controller
     {
         $data = $request->validated();
         $contextFile = $request->file('context_file');
+        $contextIds = $request->input('context_ids', []);
         
-        unset($data['context_file']);
+        unset($data['context_file'], $data['context_ids']);
 
         $project = $request->user()->projects()->create($data);
+
+        // Link saved contexts
+        if (!empty($contextIds)) {
+            $project->projectContexts()->sync($contextIds);
+        }
 
         if ($contextFile) {
             $project->update(['status' => Project::STATUS_PROCESSING]);
