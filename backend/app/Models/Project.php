@@ -19,6 +19,7 @@ class Project extends Model implements Auditable
     const STATUS_PROCESSING = 'processing';
     const STATUS_READY = 'ready';
     const STATUS_FAILED = 'error';
+    const STATUS_COMPLETE = 'complete';
 
     protected $fillable = [
         'user_id',

@@ -62,8 +62,6 @@ class GenerationController extends Controller
         $requestContexts = ProjectContext::whereIn('id', $request->context_ids ?? [])->get();
         $contexts = $projectContexts->concat($requestContexts)->unique('id');
         
-        $freeTier = $request->user()->free_tier;
-
         if ($type === 'stories') {
             $brdDraft = RequirementDraft::findOrFail($request->brd_draft_id);
             if ($brdDraft->status !== 'approved') {
@@ -86,9 +84,10 @@ class GenerationController extends Controller
             'status' => 'drafting',
             'lead_persona_id' => $leadPersona->id,
             'reviewer_persona_ids' => $reviewers->pluck('id')->toArray(),
+            'critiques' => [], // Cast handles this, but ensures it's {} in DB
         ]);
 
-        return response()->stream(function () use ($project, $draft, $leadPersona, $reviewers, $contexts, $freeTier, $type, $request) {
+        return response()->stream(function () use ($project, $draft, $leadPersona, $reviewers, $contexts, $type, $request) {
             try {
                 $accumulated = '';
                 
@@ -102,14 +101,14 @@ class GenerationController extends Controller
                 if ($type === 'brd') {
                     $intake = $project->intake?->fields ?? [];
                     $chatHistory = $project->chatMessages()->orderBy('order')->get()->toArray();
-                    $this->gemini->streamBrd($leadPersona->system_prompt, $intake, $chatHistory, $contexts->toArray(), $onChunk, $freeTier);
+                    $this->gemini->streamBrd($leadPersona->system_prompt, $intake, $chatHistory, $contexts->toArray(), $onChunk);
                 } elseif ($type === 'stories') {
                     $brd = RequirementDraft::findOrFail($request->brd_draft_id)->content;
-                    $this->gemini->streamStories($leadPersona->system_prompt, $brd, $contexts->toArray(), $onChunk, $freeTier);
+                    $this->gemini->streamStories($leadPersona->system_prompt, $brd, $contexts->toArray(), $onChunk);
                 } elseif ($type === 'spec') {
                     $brd = RequirementDraft::findOrFail($request->brd_draft_id)->content;
                     $stories = RequirementDraft::findOrFail($request->stories_draft_id)->content;
-                    $this->gemini->streamSpec($leadPersona->system_prompt, $brd, $stories, $contexts->toArray(), $onChunk, $freeTier);
+                    $this->gemini->streamSpec($leadPersona->system_prompt, $brd, $stories, $contexts->toArray(), $onChunk);
                 }
 
                 $draft->update(['content' => $accumulated]);
@@ -117,7 +116,7 @@ class GenerationController extends Controller
                 if ($reviewers->isNotEmpty()) {
                     $draft->update(['status' => 'reviewing']);
                     foreach ($reviewers as $reviewer) {
-                        ProcessCritiqueJob::dispatch($draft, $reviewer, $freeTier);
+                        ProcessCritiqueJob::dispatch($draft, $reviewer);
                     }
                     echo 'data: ' . json_encode(['status' => 'reviewing']) . "\n\n";
                 } else {
@@ -147,7 +146,7 @@ class GenerationController extends Controller
             abort(403);
         }
 
-        if ($draft->status !== 'refining') {
+        if (!in_array($draft->status, ['refining', 'failed'])) {
             abort(422, 'Draft is not ready for synthesis. Status: ' . $draft->status);
         }
 
@@ -169,7 +168,7 @@ class GenerationController extends Controller
                         if (ob_get_level() > 0) ob_flush();
                         flush();
                     },
-                    $freeTier
+                    $draft->type
                 );
 
                 $draft->update([

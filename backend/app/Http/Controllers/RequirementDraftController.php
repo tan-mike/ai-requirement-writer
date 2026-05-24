@@ -64,6 +64,21 @@ class RequirementDraftController extends Controller
 
         $draft->approve();
 
+        $this->checkProjectCompletion($project);
+
         return response()->json(['data' => $draft->fresh()]);
+    }
+
+    private function checkProjectCompletion(Project $project): void
+    {
+        $requiredTypes = ['brd', 'stories', 'spec'];
+
+        $allApproved = collect($requiredTypes)->every(function ($type) use ($project) {
+            return $project->drafts()->where('type', $type)->where('status', 'approved')->exists();
+        });
+
+        if ($allApproved) {
+            $project->update(['status' => Project::STATUS_COMPLETE]);
+        }
     }
 }

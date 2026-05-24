@@ -76,7 +76,8 @@ class GeminiGenerationService
     public function streamStories(string $systemPrompt, string $approvedBrd, array $additionalContexts, callable $onChunk): void
     {
         $prompt = $this->buildStoriesPrompt($approvedBrd, $additionalContexts);
-        $this->streamGeneration($systemPrompt, $prompt, $onChunk);
+        $fullSystemPrompt = $systemPrompt . "\n\nTASK: Now, focus specifically on generating high-quality User Stories. Use the format 'As a [user], I want [goal] so that [benefit]'. Include detailed acceptance criteria for each story.";
+        $this->streamGeneration($fullSystemPrompt, $prompt, $onChunk);
     }
 
     /**
@@ -85,15 +86,23 @@ class GeminiGenerationService
     public function streamSpec(string $systemPrompt, string $approvedBrd, string $approvedStories, array $additionalContexts, callable $onChunk): void
     {
         $prompt = $this->buildSpecPrompt($approvedBrd, $approvedStories, $additionalContexts);
-        $this->streamGeneration($systemPrompt, $prompt, $onChunk);
+        $fullSystemPrompt = $systemPrompt . "\n\nTASK: Now, focus specifically on generating a Technical Specification. Include: System Architecture, Data Models, API Contracts, and Security Considerations.";
+        $this->streamGeneration($fullSystemPrompt, $prompt, $onChunk);
     }
 
     /**
      * Generate a critique from a draft using a reviewer persona.
      */
-    public function generateCritique(string $systemPrompt, string $draftContent): string
+    public function generateCritique(string $systemPrompt, string $draftContent, string $draftType = 'document'): string
     {
-        $prompt = "Please review the following document and provide a detailed, actionable critique based on your expertise.\n\nDOCUMENT CONTENT:\n{$draftContent}";
+        $typeLabel = match($draftType) {
+            'brd' => 'Business Requirements Document (BRD)',
+            'stories' => 'User Stories',
+            'spec' => 'Technical Specification',
+            default => 'document',
+        };
+
+        $prompt = "Please review the following {$typeLabel} and provide a detailed, actionable critique based on your expertise.\n\nDOCUMENT CONTENT:\n{$draftContent}";
 
         if ($this->effectiveFreeTier) {
             sleep(2); // Throttling for free tier
@@ -103,19 +112,35 @@ class GeminiGenerationService
             ->withSystemInstruction(Content::parse($systemPrompt))
             ->generateContent($prompt);
 
-        return $this->safeExtractText($response);
+        $text = $this->safeExtractText($response);
+
+        Log::channel('reviews')->info("Critique Generated", [
+            'model' => $this->model,
+            'system_prompt' => $systemPrompt,
+            'user_id' => $this->currentUser?->id,
+            'critique' => $text,
+        ]);
+
+        return $text;
     }
 
     /**
      * Stream a synthesis of the original draft and committee critiques.
      */
-    public function streamSynthesis(string $systemPrompt, string $originalDraft, array $critiques, callable $onChunk): void
+    public function streamSynthesis(string $systemPrompt, string $originalDraft, array $critiques, callable $onChunk, string $draftType = 'document'): void
     {
+        $typeLabel = match($draftType) {
+            'brd' => 'Business Requirements Document (BRD)',
+            'stories' => 'User Stories',
+            'spec' => 'Technical Specification',
+            default => 'document',
+        };
+
         $formattedCritiques = collect($critiques)
             ->map(fn($critique, $role) => "### Feedback from {$role}:\n{$critique}")
             ->implode("\n\n");
 
-        $prompt = "You previously generated a draft. A committee of experts has reviewed it and provided feedback. 
+        $prompt = "You previously generated a draft for a {$typeLabel}. A committee of experts has reviewed it and provided feedback. 
         Please rewrite the draft, incorporating ALL the feedback below to create a high-quality, final version.
         
         ORIGINAL DRAFT:
@@ -124,7 +149,8 @@ class GeminiGenerationService
         COMMITTEE FEEDBACK:
         {$formattedCritiques}
         
-        REWRITE THE ENTIRE DOCUMENT NOW:";
+        TASK: Incorporate all feedback and provide the final, polished {$typeLabel} in markdown.
+        FINAL VERSION:";
 
         $this->streamGeneration($systemPrompt, $prompt, $onChunk);
     }
@@ -198,10 +224,17 @@ class GeminiGenerationService
         if ($this->effectiveFreeTier) {
             sleep(1); // Throttling for free tier start
         }
-
+        
         $stream = $this->getClient()->generativeModel(model: $this->model)
             ->withSystemInstruction(Content::parse($systemPrompt))
             ->streamGenerateContent($userPrompt);
+
+        Log::channel('generations')->info("Streaming Generation Started", [
+            'model' => $this->model,
+            'system_prompt' => $systemPrompt,
+            'user_prompt' => $userPrompt,
+            'user_id' => $this->currentUser?->id,
+        ]);
 
         $buffer = '';
         $headingFound = false;

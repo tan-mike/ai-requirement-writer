@@ -6,7 +6,7 @@ import StreamingOutput from '@/components/StreamingOutput'
 import DraftEditor from '@/components/DraftEditor'
 import GenerationStrategy, { GenerationConfig } from '@/components/GenerationStrategy'
 import GuidedTour from '@/components/GuidedTour'
-import ReactMarkdown from 'react-markdown'
+import CommitteeNotes from '@/components/CommitteeNotes'
 
 interface Draft {
   id: number
@@ -15,6 +15,7 @@ interface Draft {
   content: string | null
   status: 'drafting' | 'reviewing' | 'refining' | 'approved' | 'failed'
   critiques?: Record<string, string>
+  reviewer_persona_ids?: number[]
 }
 
 interface DraftsResponse {
@@ -29,6 +30,7 @@ interface ProjectResponse {
   data: {
     id: number
     name: string
+    status: string
     lead_persona_id: number
     lead_persona?: { id: number; name: string }
   }
@@ -64,7 +66,7 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
       })
       setProject(projectRes.data)
     } catch {
-      // silently ignore
+      setError('Failed to load project data. Please refresh.')
     }
   }, [id])
 
@@ -80,7 +82,7 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
   }, [drafts, loadData])
 
   function latestDraft(step: Step): Draft | undefined {
-    return drafts[step].at(-1)
+    return drafts[step][0]
   }
 
   function isApproved(step: Step): boolean {
@@ -100,6 +102,15 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
     setError('')
   }
 
+  async function handleComplete() {
+    try {
+      await apiClient.post(`/projects/${id}/complete`)
+      loadData()
+    } catch {
+      setError('Failed to mark project as complete')
+    }
+  }
+
   function generateBody(step: Step): Record<string, unknown> {
     const brd = latestDraft('brd')
     const stories = latestDraft('stories')
@@ -116,9 +127,28 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
         Back to Dashboard
       </Link>
 
-      <div>
-        <h1 className="text-4xl font-extrabold tracking-tight text-foreground">Generate Requirements</h1>
-        <p className="text-muted-foreground mt-2 text-lg">Build high-quality documentation with AI experts.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">Generate Requirements</h1>
+          <p className="text-muted-foreground mt-2 text-lg">Build high-quality documentation with AI experts.</p>
+        </div>
+
+        <div className="flex-shrink-0">
+          {project?.status === 'complete' ? (
+            <div className="bg-emerald-100 text-emerald-700 px-6 py-3 rounded-xl font-bold border-2 border-emerald-200 flex items-center gap-2 shadow-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Project Completed
+            </div>
+          ) : isApproved('brd') && (
+            <button
+              onClick={handleComplete}
+              className="btn-primary flex items-center gap-2 w-full sm:w-auto justify-center"
+            >
+              Mark as Completed
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -206,16 +236,18 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
                         <span className="text-sm font-medium text-yellow-800">Reviewers are auditing the draft...</span>
                       </div>
                       <span className="text-xs text-yellow-700 font-mono">
-                        {Object.keys(draft.critiques ?? {}).length} / {(draft as any).reviewer_persona_ids?.length ?? 0} Done
+                        {Object.keys(draft.critiques ?? {}).length} / {draft.reviewer_persona_ids?.length ?? 0} Done
                       </span>
                     </div>
                   )}
 
-                  {draft.status === 'refining' && (
+                  {(draft.status === 'refining' || draft.status === 'failed') && Object.keys(draft.critiques ?? {}).length > 0 && (
                     <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-lg flex items-center justify-between">
                       <div className="flex items-center gap-3 text-indigo-800">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/></svg>
-                        <span className="text-sm font-bold">Committee Review Complete!</span>
+                        <span className="text-sm font-bold">
+                          {draft.status === 'failed' ? 'Synthesis failed. Try again?' : 'Committee Review Complete!'}
+                        </span>
                       </div>
                       <button 
                         onClick={() => setSynthesizing(draft.id)}
@@ -226,28 +258,18 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
                     </div>
                   )}
 
-                  <div className="flex flex-col lg:flex-row gap-6">
-                    <div className="flex-1 min-w-0">
+                  <div className="space-y-6">
+                    {draft.critiques && Object.keys(draft.critiques).length > 0 && (
+                      <CommitteeNotes critiques={draft.critiques} />
+                    )}
+
+                    <div className="min-w-0">
                       <DraftEditor
                         projectId={id}
                         draft={draft}
                         onApproved={loadData}
                       />
                     </div>
-                    
-                    {draft.critiques && Object.keys(draft.critiques).length > 0 && (
-                      <div className="lg:w-80 min-w-0 space-y-4">
-                        <h4 className="text-sm font-bold uppercase tracking-widest text-muted-foreground border-b pb-2">Committee Notes</h4>
-                        {Object.entries(draft.critiques).map(([role, critique]) => (
-                          <div key={role} className="bg-muted/50 border border-border rounded p-4 text-xs space-y-2">
-                            <span className="font-bold text-primary">{role}</span>
-                            <div className="prose prose-xs dark:prose-invert text-muted-foreground line-clamp-6 hover:line-clamp-none transition-all cursor-pointer">
-                              <ReactMarkdown>{critique}</ReactMarkdown>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
 
                   {draft.status === 'approved' && (

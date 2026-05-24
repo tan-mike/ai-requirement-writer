@@ -19,6 +19,9 @@ interface Project {
   template: {
     fields: TemplateField[]
   }
+  intake?: {
+    fields: Record<string, string>
+  }
 }
 
 export default function IntakePage({ params }: { params: Promise<{ id: string }> }) {
@@ -32,7 +35,12 @@ export default function IntakePage({ params }: { params: Promise<{ id: string }>
 
   useEffect(() => {
     apiClient.get<{ data: Project }>(`/projects/${id}`)
-      .then(res => setProject(res.data))
+      .then(res => {
+        setProject(res.data)
+        if (res.data.intake?.fields) {
+          setFormValues(res.data.intake.fields)
+        }
+      })
       .catch(() => setLoadError('Failed to load project'))
   }, [id])
 
