@@ -63,7 +63,7 @@ class ProjectController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        return response()->json(['data' => $project->load(['template', 'leadPersona'])]);
+        return response()->json(['data' => $project->load(['template', 'leadPersona', 'intake'])]);
     }
 
     public function destroy(Request $request, Project $project): JsonResponse
@@ -75,5 +75,16 @@ class ProjectController extends Controller
         $project->delete();
 
         return response()->json(null, 204);
+    }
+
+    public function complete(Request $request, Project $project): JsonResponse
+    {
+        if ($project->user_id !== $request->user()->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $project->update(['status' => Project::STATUS_COMPLETE]);
+
+        return response()->json(['data' => $project]);
     }
 }

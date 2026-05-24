@@ -20,6 +20,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Intake
     Route::post('/projects/{project}/intake', [ProjectIntakeController::class, 'store']);
+    Route::post('/projects/{project}/complete', [ProjectController::class, 'complete']);
 
     // Generation (SSE streaming)
     Route::post('/projects/{project}/generate/brd', [GenerationController::class, 'brd']);
