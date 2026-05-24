@@ -20,6 +20,7 @@ class StoreProjectRequest extends FormRequest
             'template_id' => ['nullable', 'exists:templates,id'],
             'lead_persona_id' => ['required', 'exists:personas,id'],
             'mode' => ['nullable', 'string', Rule::in(['template', 'conversational'])],
+            'is_team_shared' => ['nullable', 'boolean'],
             'context_ids' => ['nullable', 'array'],
             'context_ids.*' => ['exists:project_contexts,id'],
         ];

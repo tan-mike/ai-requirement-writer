@@ -11,7 +11,15 @@ class ProjectController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $projects = $request->user()->projects()->latest()->get();
+        $user = $request->user();
+        $projects = Project::where(function($query) use ($user) {
+            $query->where('user_id', $user->id)
+                  ->when($user->current_team_id, function($q) use ($user) {
+                      $q->orWhere('team_id', $user->current_team_id);
+                  });
+        })
+        ->latest()
+        ->get();
 
         return response()->json(['data' => $projects]);
     }
@@ -21,12 +29,14 @@ class ProjectController extends Controller
         $data = $request->validated();
         $contextFile = $request->file('context_file');
         $contextIds = $request->input('context_ids', []);
+        $isTeamShared = $request->boolean('is_team_shared');
         
-        unset($data['context_file'], $data['context_ids']);
+        unset($data['context_file'], $data['context_ids'], $data['is_team_shared']);
+
+        $data['team_id'] = $isTeamShared ? $request->user()->current_team_id : null;
 
         $project = $request->user()->projects()->create($data);
 
-        // Link saved contexts
         if (!empty($contextIds)) {
             $project->projectContexts()->sync($contextIds);
         }
@@ -45,17 +55,21 @@ class ProjectController extends Controller
 
     public function show(Request $request, Project $project): JsonResponse
     {
-        if ($project->user_id !== $request->user()->id) {
+        $user = $request->user();
+        $isOwner = $project->user_id === $user->id;
+        $isTeamMember = $project->team_id && $project->team_id === $user->current_team_id;
+
+        if (!$isOwner && !$isTeamMember) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        return response()->json(['data' => $project->load('template')]);
+        return response()->json(['data' => $project->load(['template', 'leadPersona'])]);
     }
 
     public function destroy(Request $request, Project $project): JsonResponse
     {
         if ($project->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Forbidden'], 403);
+            return response()->json(['message' => 'Only the owner can delete a project.'], 403);
         }
 
         $project->delete();

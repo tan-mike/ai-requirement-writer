@@ -7,12 +7,14 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'role', 'free_tier', 'gemini_api_key', 'tour_flags'])]
+#[Fillable(['name', 'email', 'password', 'role', 'free_tier', 'gemini_api_key', 'tour_flags', 'current_team_id'])]
 #[Hidden(['password', 'remember_token', 'gemini_api_key'])]
 class User extends Authenticatable
 {
@@ -41,6 +43,7 @@ class User extends Authenticatable
             'free_tier' => 'boolean',
             'gemini_api_key' => 'encrypted',
             'tour_flags' => 'array',
+            'current_team_id' => 'integer',
         ];
     }
 
@@ -57,5 +60,15 @@ class User extends Authenticatable
     public function personas(): HasMany
     {
         return $this->hasMany(Persona::class);
+    }
+
+    public function teams(): BelongsToMany
+    {
+        return $this->belongsToMany(Team::class);
+    }
+
+    public function currentTeam(): BelongsTo
+    {
+        return $this->belongsTo(Team::class, 'current_team_id');
     }
 }

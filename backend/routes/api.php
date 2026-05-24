@@ -30,6 +30,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Contexts
     Route::get('/contexts', [\App\Http\Controllers\ProjectContextController::class, 'index']);
     Route::post('/contexts', [\App\Http\Controllers\ProjectContextController::class, 'store']);
+    Route::get('/contexts/{context}/history', [\App\Http\Controllers\ProjectContextController::class, 'history']);
     Route::patch('/contexts/{context}', [\App\Http\Controllers\ProjectContextController::class, 'update']);
     Route::delete('/contexts/{context}', [\App\Http\Controllers\ProjectContextController::class, 'destroy']);
 
@@ -47,7 +48,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/user/skills/upload', [\App\Http\Controllers\SkillController::class, 'upload']);
     Route::delete('/user/skills/{persona}', [\App\Http\Controllers\SkillController::class, 'destroy']);
 
+    // Teams
+    Route::get('/teams', [\App\Http\Controllers\TeamController::class, 'index']);
+    Route::post('/teams', [\App\Http\Controllers\TeamController::class, 'store']);
+    Route::post('/teams/join', [\App\Http\Controllers\TeamController::class, 'join']);
+    Route::patch('/user/current-team', [\App\Http\Controllers\TeamController::class, 'switch']);
+
     // User Settings
+    Route::get('/user/me', \App\Http\Controllers\UserMeController::class);
     Route::get('/user/settings', [\App\Http\Controllers\UserSettingsController::class, 'show']);
     Route::patch('/user/settings', [\App\Http\Controllers\UserSettingsController::class, 'update']);
 

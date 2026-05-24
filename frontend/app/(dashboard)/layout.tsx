@@ -3,6 +3,7 @@ import { useAuth } from '@/lib/auth'
 import { useRouter, usePathname } from 'next/navigation'
 import { useEffect } from 'react'
 import Link from 'next/link'
+import TeamSwitcher from '@/components/TeamSwitcher'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth()
@@ -50,6 +51,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             </div>
             <div className="flex items-center gap-6">
+              <TeamSwitcher />
               <div className="hidden sm:flex flex-col items-end">
                 <span className="text-sm font-semibold text-foreground">{user.name}</span>
                 <span className="text-xs text-muted-foreground">{user.email}</span>

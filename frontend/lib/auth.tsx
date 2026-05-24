@@ -8,6 +8,7 @@ interface User {
   name: string
   email: string
   role: string
+  current_team_id: number | null
 }
 
 interface AuthContextType {
@@ -16,6 +17,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  refreshUser: () => Promise<void>
+  switchTeam: (teamId: number | null) => Promise<void>
   loading: boolean
 }
 
@@ -66,8 +69,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
+  async function refreshUser() {
+    try {
+      const res = await apiClient.get<{ data: User }>('/user/me')
+      const data = res.data;
+      const updatedUser = { ...user, ...data } as User;
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      setUser(updatedUser);
+    } catch (err) {
+      // ignore
+    }
+  }
+
+  async function switchTeam(teamId: number | null) {
+    await apiClient.patch('/user/current-team', { team_id: teamId })
+    await refreshUser()
+    window.location.reload()
+  }
+
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, refreshUser, switchTeam, loading }}>
       {children}
     </AuthContext.Provider>
   )

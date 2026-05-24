@@ -8,10 +8,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use OwenIt\Auditing\Contracts\Auditable;
+use OwenIt\Auditing\Auditable as AuditableTrait;
 
-class Project extends Model
+class Project extends Model implements Auditable
 {
-    use HasFactory;
+    use HasFactory, AuditableTrait;
 
     const STATUS_DRAFT = 'draft';
     const STATUS_PROCESSING = 'processing';
@@ -20,6 +22,7 @@ class Project extends Model
 
     protected $fillable = [
         'user_id',
+        'team_id',
         'template_id',
         'name',
         'type',
@@ -39,6 +42,11 @@ class Project extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
     }
 
     public function leadPersona(): BelongsTo
