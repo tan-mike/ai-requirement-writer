@@ -15,7 +15,7 @@ class RequirementDraftController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $drafts = $project->drafts()->latest()->get()->groupBy('type');
+        $drafts = $project->drafts()->with('critiques.persona')->latest()->get()->groupBy('type');
 
         return response()->json(['data' => $drafts]);
     }
@@ -30,7 +30,7 @@ class RequirementDraftController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        return response()->json(['data' => $draft]);
+        return response()->json(['data' => $draft->load('critiques.persona')]);
     }
 
     public function update(Request $request, Project $project, RequirementDraft $draft): JsonResponse

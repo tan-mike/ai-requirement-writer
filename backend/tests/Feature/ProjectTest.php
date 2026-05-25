@@ -45,6 +45,27 @@ class ProjectTest extends TestCase
         ]);
     }
 
+    public function test_project_is_ready_immediately_if_no_processing_needed(): void
+    {
+        $template = Template::factory()->create(['type' => 'webapp']);
+
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/projects', [
+                'name' => 'Simple Project',
+                'type' => 'webapp',
+                'template_id' => $template->id,
+                'lead_persona_id' => $this->persona->id,
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.status', Project::STATUS_READY);
+        
+        $this->assertDatabaseHas('projects', [
+            'name' => 'Simple Project',
+            'status' => Project::STATUS_READY
+        ]);
+    }
+
     public function test_user_can_list_their_own_projects(): void
     {
         Project::factory()->count(2)->create([

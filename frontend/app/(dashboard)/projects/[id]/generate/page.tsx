@@ -8,13 +8,20 @@ import GenerationStrategy, { GenerationConfig } from '@/components/GenerationStr
 import GuidedTour from '@/components/GuidedTour'
 import CommitteeNotes from '@/components/CommitteeNotes'
 
+interface Critique {
+  id: number
+  persona: { name: string }
+  content: string
+  status: string
+}
+
 interface Draft {
   id: number
   type: 'brd' | 'stories' | 'spec'
   version: number
   content: string | null
   status: 'drafting' | 'reviewing' | 'refining' | 'approved' | 'failed'
-  critiques?: Record<string, string>
+  critiques?: Critique[]
   reviewer_persona_ids?: number[]
 }
 
@@ -104,7 +111,7 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
 
   async function handleComplete() {
     try {
-      await apiClient.post(`/projects/${id}/complete`)
+      await apiClient.post(`/projects/${id}/complete`, {})
       loadData()
     } catch {
       setError('Failed to mark project as complete')
@@ -236,17 +243,17 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
                         <span className="text-sm font-medium text-yellow-800">Reviewers are auditing the draft...</span>
                       </div>
                       <span className="text-xs text-yellow-700 font-mono">
-                        {Object.keys(draft.critiques ?? {}).length} / {draft.reviewer_persona_ids?.length ?? 0} Done
+                        {(draft.critiques ?? []).length} / {draft.reviewer_persona_ids?.length ?? 0} Done
                       </span>
                     </div>
                   )}
 
-                  {(draft.status === 'refining' || draft.status === 'failed') && Object.keys(draft.critiques ?? {}).length > 0 && (
+                  {draft.status === 'refining' && (draft.critiques ?? []).length > 0 && (
                     <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-lg flex items-center justify-between">
                       <div className="flex items-center gap-3 text-indigo-800">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/></svg>
                         <span className="text-sm font-bold">
-                          {draft.status === 'failed' ? 'Synthesis failed. Try again?' : 'Committee Review Complete!'}
+                          Committee Review Complete!
                         </span>
                       </div>
                       <button 
@@ -259,7 +266,7 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
                   )}
 
                   <div className="space-y-6">
-                    {draft.critiques && Object.keys(draft.critiques).length > 0 && (
+                    {draft.critiques && draft.critiques.length > 0 && (
                       <CommitteeNotes critiques={draft.critiques} />
                     )}
 

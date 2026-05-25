@@ -4,12 +4,17 @@ import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 
 interface CommitteeNotesProps {
-  critiques: Record<string, string>
+  critiques: {
+    id: number
+    persona: { name: string }
+    content: string
+    status: string
+  }[]
 }
 
 export default function CommitteeNotes({ critiques }: CommitteeNotesProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const roles = Object.keys(critiques)
+  const roles = critiques.map(c => c.persona.name)
   const [activeTab, setActiveTab] = useState(roles[0])
   const [mounted, setMounted] = useState(false)
 
@@ -64,7 +69,7 @@ export default function CommitteeNotes({ critiques }: CommitteeNotesProps) {
 
         {/* Content - Ensure it stays below the tabs */}
         <div className="flex-1 overflow-y-auto p-8 prose dark:prose-invert max-w-none bg-surface">
-           <ReactMarkdown>{critiques[activeTab]}</ReactMarkdown>
+           <ReactMarkdown>{critiques.find(c => c.persona.name === activeTab)?.content || ''}</ReactMarkdown>
         </div>
 
         {/* Footer */}

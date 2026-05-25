@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
 class RequirementDraft extends Model
 {
     use HasFactory;
@@ -19,12 +21,10 @@ class RequirementDraft extends Model
         'status',
         'lead_persona_id',
         'reviewer_persona_ids',
-        'critiques'
     ];
 
     protected $casts = [
         'reviewer_persona_ids' => 'array',
-        'critiques' => 'array',
         'version' => 'integer',
     ];
 
@@ -41,6 +41,11 @@ class RequirementDraft extends Model
     public function leadPersona(): BelongsTo
     {
         return $this->belongsTo(Persona::class, 'lead_persona_id');
+    }
+
+    public function critiques(): HasMany
+    {
+        return $this->hasMany(DraftCritique::class);
     }
 
     public function scopeApproved(Builder $query): Builder

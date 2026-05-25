@@ -48,6 +48,8 @@ class ProjectController extends Controller
         } elseif ($project->repository_url || $project->repository_path) {
             $project->update(['status' => Project::STATUS_PROCESSING]);
             \App\Jobs\ProcessRepositoryJob::dispatch($project);
+        } else {
+            $project->update(['status' => Project::STATUS_READY]);
         }
 
         return response()->json(['data' => $project], 201);

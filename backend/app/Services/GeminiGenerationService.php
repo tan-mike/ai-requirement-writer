@@ -178,20 +178,33 @@ class GeminiGenerationService
      */
     public function streamDiscoveryChat(string $systemPrompt, string $architectureSummary, array $history, callable $onChunk): void
     {
+        // Strip generation-only mandates from the system prompt if they exist
+        $cleanSystemPrompt = str_replace(
+            "CRITICAL MANDATE: Output ONLY the markdown document. Do NOT include any conversational preamble, internal reasoning, or concluding remarks. Start your response immediately with the first markdown heading (e.g., '# ' or '## ').",
+            "",
+            $systemPrompt
+        );
+
         $rules = "
         
         EXISTING ARCHITECTURE:
         {$architectureSummary}
         
         INTERVIEW RULES:
-        1. Ask ONE question at a time.
-        2. Challenge 'Why' behind features.
-        3. Protect the integrity of the existing architecture.
-        4. If a feature contradicts the architecture or introduces debt, push back.
-        5. When requirements are clear (Problem, Audience, Constraints, Metrics), output exactly [READY_FOR_BRD] and nothing else.
+        - You are currently in a 'Discovery Interview' mode. Your goal is to grill the user's requirements to find the real need.
+        - Ask ONE question at a time. Do not overwhelm the user.
+        - Challenge the 'Why' behind every feature. Act as a skeptical but helpful product partner.
+        - Protect the integrity of the existing architecture. If a user request introduces tech debt or contradicts the architecture, push back firmly.
+        - Once you have a crystal clear understanding of the Problem, Audience, Constraints, and Success Metrics, output exactly [READY_FOR_BRD] and nothing else.
+        
+        STRICT RESPONSE FORMAT:
+        - Output ONLY your response to the user.
+        - DO NOT output your internal reasoning, chain of thought, goal analysis, or rule verification.
+        - DO NOT restate the user's input or the rules.
+        - Be direct, professional, and conversational.
         ";
 
-        $fullSystemPrompt = $systemPrompt . $rules;
+        $fullSystemPrompt = trim($cleanSystemPrompt) . "\n\n" . trim($rules);
 
         $historyCollection = collect($history);
         $lastMessage = $historyCollection->pop();
@@ -200,6 +213,13 @@ class GeminiGenerationService
         $chatHistory = $historyCollection->map(fn($msg) => 
             Content::parse($msg['content'], $msg['role'] === 'assistant' ? Role::MODEL : Role::USER)
         )->toArray();
+
+        Log::channel('generations')->info("Discovery Chat Started", [
+            'model' => $this->model,
+            'system_prompt' => $fullSystemPrompt,
+            'last_text' => $lastText,
+            'user_id' => $this->currentUser?->id,
+        ]);
 
         $chat = $this->getClient()->generativeModel(model: $this->model)
             ->withSystemInstruction(Content::parse($fullSystemPrompt))
@@ -271,24 +291,24 @@ class GeminiGenerationService
 
     /**
      * Safely extract text from a Gemini response, handling multi-part content.
+     * Skips parts marked as 'thought' (internal reasoning).
      */
     private function safeExtractText(mixed $response): string
     {
-        try {
-            // Try the quick accessor first
-            return $response->text();
-        } catch (\ValueError $e) {
-            // Fallback to aggregating all parts if it's a multi-part response
-            $text = '';
-            foreach ($response->candidates as $candidate) {
-                foreach ($candidate->content->parts as $part) {
-                    if (isset($part->text)) {
-                        $text .= $part->text;
-                    }
+        $text = '';
+        foreach ($response->candidates as $candidate) {
+            foreach ($candidate->content->parts as $part) {
+                // Skip internal reasoning/thoughts
+                if (property_exists($part, 'thought') && $part->thought) {
+                    continue;
+                }
+                
+                if (isset($part->text)) {
+                    $text .= $part->text;
                 }
             }
-            return $text;
         }
+        return $text;
     }
 
     private function buildBrdPrompt(array $fields, array $chatHistory = [], array $additionalContexts = []): string

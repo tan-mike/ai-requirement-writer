@@ -27,29 +27,26 @@ class ProcessCritiqueJob implements ShouldQueue
 
         $gemini->forUser($this->draft->project->user);
 
-        $critique = $gemini->generateCritique(
+        $critiqueContent = $gemini->generateCritique(
             $this->reviewer->system_prompt,
             $this->draft->content,
             $this->draft->type
         );
 
-        // Ensure critiques is initialized as an object if NULL (Atomic check)
-        RequirementDraft::where('id', $this->draft->id)
-            ->whereNull('critiques')
-            ->update(['critiques' => '{}']);
+        // Save to the new table
+        \App\Models\DraftCritique::updateOrCreate(
+            ['requirement_draft_id' => $this->draft->id, 'persona_id' => $this->reviewer->id],
+            ['content' => $critiqueContent, 'status' => 'completed']
+        );
 
-        // Use Query Builder for atomic JSON update to prevent race conditions
-        RequirementDraft::where('id', $this->draft->id)->update([
-            "critiques->{$this->reviewer->name}" => $critique
-        ]);
-
-        // Refresh model to get latest critiques from other workers
+        // Refresh model to get latest state
         $this->draft->refresh();
-        $critiques = $this->draft->critiques ?? [];
 
         // If all reviewers are done, update status to 'refining'
-        $totalReviewers = count($this->draft->reviewer_persona_ids ?? []);
-        if (count($critiques) === $totalReviewers) {
+        $totalExpected = count($this->draft->reviewer_persona_ids ?? []);
+        $completedCount = $this->draft->critiques()->where('status', 'completed')->count();
+
+        if ($completedCount === $totalExpected) {
             $this->draft->update(['status' => 'refining']);
         }
     }

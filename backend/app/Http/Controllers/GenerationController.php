@@ -158,10 +158,14 @@ class GenerationController extends Controller
         return response()->stream(function () use ($draft, $leadPersona) {
             try {
                 $accumulated = '';
+                $critiques = $draft->critiques()->with('persona')->get()
+                    ->pluck('content', 'persona.name')
+                    ->toArray();
+
                 $this->gemini->streamSynthesis(
                     $leadPersona->system_prompt,
                     $draft->content,
-                    $draft->critiques ?? [],
+                    $critiques,
                     function (string $chunk) use (&$accumulated) {
                         $accumulated .= $chunk;
                         echo 'data: ' . json_encode(['text' => $chunk]) . "\n\n";
