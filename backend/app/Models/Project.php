@@ -75,6 +75,11 @@ class Project extends Model implements Auditable
         return $this->hasMany(ChatMessage::class);
     }
 
+    public function aiGenerationLogs(): HasMany
+    {
+        return $this->hasMany(AiGenerationLog::class);
+    }
+
     public function projectContexts(): BelongsToMany
     {
         return $this->belongsToMany(ProjectContext::class, 'project_project_context');

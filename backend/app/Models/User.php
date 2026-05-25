@@ -62,6 +62,11 @@ class User extends Authenticatable
         return $this->hasMany(Persona::class);
     }
 
+    public function aiGenerationLogs(): HasMany
+    {
+        return $this->hasMany(AiGenerationLog::class);
+    }
+
     public function teams(): BelongsToMany
     {
         return $this->belongsToMany(Team::class);
