@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import { apiClient } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import ReactMarkdown from 'react-markdown'
 
 interface ProjectContext {
   id: number
@@ -23,15 +22,22 @@ interface Audit {
   created_at: string
 }
 
+interface Team {
+  id: number
+  name: string
+}
+
 export default function ProjectContextManager() {
   const { user } = useAuth()
   const [contexts, setContexts] = useState<ProjectContext[]>([])
+  const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(false)
   const [newName, setNewName] = useState('')
   const [newContent, setNewContent] = useState('')
   const [newFile, setNewFile] = useState<File | null>(null)
   const [createMode, setCreateMode] = useState<'text' | 'file'>('text')
   const [isTeamShared, setIsTeamShared] = useState(false)
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   
   // Edit State
@@ -39,6 +45,7 @@ export default function ProjectContextManager() {
   const [editName, setEditName] = useState('')
   const [editContent, setEditContent] = useState('')
   const [editIsTeamShared, setEditIsTeamShared] = useState(false)
+  const [editTeamId, setEditTeamId] = useState<number | null>(null)
 
   // History State
   const [history, setHistory] = useState<Audit[]>([])
@@ -49,17 +56,35 @@ export default function ProjectContextManager() {
     setContexts(data)
   }
 
-  useEffect(() => { loadContexts() }, [])
+  const loadTeams = async () => {
+    try {
+      const res = await apiClient.get<{ data: Team[] }>('/teams')
+      setTeams(res.data)
+    } catch (err) {
+      console.error('Failed to load teams', err)
+    }
+  }
+
+  useEffect(() => { 
+    loadContexts()
+    loadTeams()
+  }, [])
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     try {
+      const teamId = isTeamShared ? (selectedTeamId || user?.current_team_id) : null
       if (createMode === 'file' && newFile) {
         const formData = new FormData()
         formData.append('name', newName)
         formData.append('file', newFile)
-        formData.append('is_team_shared', isTeamShared ? '1' : '0')
+        if (teamId) {
+            formData.append('team_id', teamId.toString())
+            formData.append('is_team_shared', '1')
+        } else {
+            formData.append('is_team_shared', '0')
+        }
         const token = localStorage.getItem('token')
         const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api'
         await fetch(`${BASE_URL}/contexts`, {
@@ -71,7 +96,8 @@ export default function ProjectContextManager() {
         await apiClient.post('/contexts', { 
           name: newName, 
           content: newContent,
-          is_team_shared: isTeamShared 
+          team_id: teamId,
+          is_team_shared: !!teamId
         })
       }
       
@@ -80,6 +106,7 @@ export default function ProjectContextManager() {
       setNewFile(null)
       setShowAdd(false)
       setIsTeamShared(false)
+      setSelectedTeamId(null)
       await loadContexts()
     } finally {
       setLoading(false)
@@ -89,10 +116,12 @@ export default function ProjectContextManager() {
   const handleUpdate = async (id: number) => {
     setLoading(true)
     try {
+      const teamId = editIsTeamShared ? (editTeamId || user?.current_team_id) : null
       await apiClient.patch(`/contexts/${id}`, { 
         name: editName,
         content: editContent,
-        is_team_shared: editIsTeamShared
+        team_id: teamId,
+        is_team_shared: !!teamId
       })
       setEditingId(null)
       await loadContexts()
@@ -112,6 +141,7 @@ export default function ProjectContextManager() {
     setEditName(ctx.name)
     setEditContent(ctx.content)
     setEditIsTeamShared(!!ctx.team_id)
+    setEditTeamId(ctx.team_id)
   }
 
   const loadHistory = async (ctx: ProjectContext) => {
@@ -146,16 +176,34 @@ export default function ProjectContextManager() {
                 </button>
             </div>
 
-            {user?.current_team_id && (
-                <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Share with team</span>
-                    <button 
-                        type="button"
-                        onClick={() => setIsTeamShared(!isTeamShared)}
-                        className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${isTeamShared ? 'bg-indigo-600' : 'bg-muted'}`}
-                    >
-                        <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isTeamShared ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
+            {teams.length > 0 && (
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Share with team</span>
+                        <button 
+                            type="button"
+                            onClick={() => setIsTeamShared(!isTeamShared)}
+                            className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${isTeamShared ? 'bg-indigo-600' : 'bg-muted'}`}
+                        >
+                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isTeamShared ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
+                    </div>
+                    {isTeamShared && teams.length > 1 && (
+                        <select 
+                            value={selectedTeamId || user?.current_team_id || ''} 
+                            onChange={e => setSelectedTeamId(Number(e.target.value))}
+                            className="text-[10px] font-bold bg-muted border-none rounded px-2 py-1 outline-none focus:ring-1 focus:ring-primary"
+                        >
+                            {!selectedTeamId && !user?.current_team_id && <option value="">Select a team...</option>}
+                            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                    )}
+                    {isTeamShared && teams.length === 1 && (
+                        <span className="text-[10px] text-indigo-600 font-bold">{teams[0].name}</span>
+                    )}
+                    {isTeamShared && teams.length > 1 && !selectedTeamId && user?.current_team_id && (
+                        <span className="text-[10px] text-indigo-600 font-bold">({teams.find(t => t.id === user.current_team_id)?.name})</span>
+                    )}
                 </div>
             )}
           </div>
@@ -229,9 +277,24 @@ export default function ProjectContextManager() {
                     <textarea className="w-full bg-background border border-input rounded-lg px-3 py-3 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none" rows={8} value={editContent} onChange={e => setEditContent(e.target.value)} />
                 </div>
 
-                {ctx.user_id === user?.id && user?.current_team_id && (
+                {ctx.user_id === user?.id && teams.length > 0 && (
                     <div className="flex items-center justify-between p-2 bg-muted/50 rounded-lg">
-                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Team Visibility</span>
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Team Visibility</span>
+                            {editIsTeamShared && teams.length > 1 ? (
+                                <select 
+                                    value={editTeamId || user?.current_team_id || ''} 
+                                    onChange={e => setEditTeamId(Number(e.target.value))}
+                                    className="text-[9px] font-bold bg-transparent border-none p-0 outline-none text-indigo-600"
+                                >
+                                    {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                </select>
+                            ) : (
+                                <span className="text-[9px] text-indigo-600 font-bold">
+                                    {editIsTeamShared ? (teams.find(t => t.id === (editTeamId || user?.current_team_id))?.name || 'Shared') : 'Private'}
+                                </span>
+                            )}
+                        </div>
                         <button 
                             type="button"
                             onClick={() => setEditIsTeamShared(!editIsTeamShared)}

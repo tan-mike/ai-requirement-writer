@@ -56,6 +56,7 @@ class TeamsTest extends TestCase
     public function test_user_can_share_context_with_team(): void
     {
         $team = Team::create(['name' => 'Gamma Team', 'code' => 'GAMMA1', 'owner_id' => $this->user->id]);
+        $team->users()->attach($this->user->id);
         $this->user->update(['current_team_id' => $team->id]);
 
         $response = $this->actingAs($this->user)
