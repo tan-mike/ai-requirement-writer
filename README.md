@@ -83,6 +83,9 @@ Automated tool to generate Business Requirements Documents (BRD), User Stories, 
 - **Worker:** You **MUST** run a persistent queue worker (e.g., via Supervisor) to handle repository ingestion: `php artisan queue:work`.
 - **Optimization:** Run `php artisan optimize` in production.
 
+### AWS (Enterprise/Internal)
+For internal team deployments (10-20 users) requiring high-concurrency AI streaming, see the [AWS Deployment Guide](./DEPLOYMENT_AWS.md).
+
 ### Frontend (Next.js)
 
 - **Platform:** Deploy to Vercel (recommended), Netlify, or a VPS.
