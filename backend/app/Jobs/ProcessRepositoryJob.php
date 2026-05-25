@@ -13,6 +13,8 @@ class ProcessRepositoryJob implements ShouldQueue
 {
     use Queueable;
 
+    public $timeout = 120;
+
     public function __construct(public Project $project)
     {
     }
@@ -91,5 +93,14 @@ class ProcessRepositoryJob implements ShouldQueue
         }
 
         return $context;
+    }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        $this->project->update(['status' => Project::STATUS_FAILED]);
+        \Illuminate\Support\Facades\Log::error("Repository Job Failed Permanently: " . $exception->getMessage());
     }
 }

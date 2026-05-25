@@ -12,6 +12,8 @@ class ProcessContextFileJob implements ShouldQueue
 {
     use Queueable;
 
+    public $timeout = 120;
+
     public function __construct(
         public Project $project,
         public string $filePath
@@ -38,5 +40,14 @@ class ProcessContextFileJob implements ShouldQueue
             Log::error("Failed to process context file: " . $e->getMessage());
             $this->project->update(['status' => Project::STATUS_FAILED]);
         }
+    }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        $this->project->update(['status' => Project::STATUS_FAILED]);
+        \Illuminate\Support\Facades\Log::error("Context File Job Failed Permanently: " . $exception->getMessage());
     }
 }

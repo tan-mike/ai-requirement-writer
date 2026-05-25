@@ -14,11 +14,15 @@ class StoreProjectRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', 'string', Rule::in(['webapp', 'mobile', 'api', 'data', 'custom'])],
-            'repository_url' => ['nullable', 'url', 'required_without_all:repository_path,context_file'],
-            'repository_path' => ['nullable', 'string', 'required_without_all:repository_url,context_file'],
-            'context_file' => ['nullable', 'file', 'max:2048', 'mimes:txt,json,xml,md', 'required_without_all:repository_url,repository_path'],
+            'repository_url' => ['nullable', 'url'],
+            'repository_path' => ['nullable', 'string'],
+            'context_file' => ['nullable', 'file', 'max:2048', 'mimes:txt,json,xml,md'],
             'template_id' => ['nullable', 'exists:templates,id'],
+            'lead_persona_id' => ['required', 'exists:personas,id'],
             'mode' => ['nullable', 'string', Rule::in(['template', 'conversational'])],
+            'is_team_shared' => ['nullable', 'boolean'],
+            'context_ids' => ['nullable', 'array'],
+            'context_ids.*' => ['exists:project_contexts,id'],
         ];
     }
 }

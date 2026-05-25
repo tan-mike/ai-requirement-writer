@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Persona;
 use App\Models\Project;
 use App\Models\ProjectIntake;
 use App\Models\RequirementDraft;
@@ -15,11 +16,18 @@ class GenerationTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+    private Persona $persona;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->user = User::factory()->create();
+        $this->persona = Persona::create([
+            'slug' => 'test-lead',
+            'name' => 'Test Lead',
+            'role' => 'lead',
+            'system_prompt' => 'Test prompt',
+        ]);
     }
 
     private function createIntake(Project $project): ProjectIntake
@@ -38,48 +46,50 @@ class GenerationTest extends TestCase
             'version' => $version,
             'content' => "Approved {$type} content",
             'status' => 'approved',
+            'lead_persona_id' => $this->persona->id,
         ]);
     }
 
     public function test_brd_generation_creates_draft_and_streams(): void
     {
-        $project = Project::factory()->create(['user_id' => $this->user->id]);
+        $project = Project::factory()->create([
+            'user_id' => $this->user->id,
+            'lead_persona_id' => $this->persona->id,
+        ]);
         $this->createIntake($project);
 
         $mock = $this->mock(GeminiGenerationService::class);
+        $mock->shouldReceive('forUser')->andReturnSelf();
         $mock->shouldReceive('streamBrd')
-            ->andReturnUsing(function (array $fields, callable $cb) {
+            ->andReturnUsing(function ($sp, $fields, $chat, $ctx, callable $cb) {
                 $cb('Generated content');
             });
 
         $response = $this->actingAs($this->user)
-            ->postJson("/api/projects/{$project->id}/generate/brd");
+            ->postJson("/api/projects/{$project->id}/generate/brd", [
+                'reviewer_persona_ids' => [],
+            ]);
 
         $response->assertOk();
         $this->assertDatabaseHas('requirement_drafts', [
             'project_id' => $project->id,
             'type' => 'brd',
+            'lead_persona_id' => $this->persona->id,
         ]);
-    }
-
-    public function test_brd_generation_fails_without_intake(): void
-    {
-        $project = Project::factory()->create(['user_id' => $this->user->id]);
-
-        $this->actingAs($this->user)
-            ->postJson("/api/projects/{$project->id}/generate/brd")
-            ->assertUnprocessable();
     }
 
     public function test_stories_generation_requires_approved_brd(): void
     {
-        $project = Project::factory()->create(['user_id' => $this->user->id]);
+        $project = Project::factory()->create([
+            'user_id' => $this->user->id,
+            'lead_persona_id' => $this->persona->id,
+        ]);
         $brd = RequirementDraft::create([
             'project_id' => $project->id,
             'type' => 'brd',
             'version' => 1,
             'content' => 'BRD content',
-            'status' => 'draft', // NOT approved
+            'status' => 'drafting', // NOT approved
         ]);
 
         $this->actingAs($this->user)
@@ -91,18 +101,23 @@ class GenerationTest extends TestCase
 
     public function test_stories_generation_passes_brd_as_context(): void
     {
-        $project = Project::factory()->create(['user_id' => $this->user->id]);
+        $project = Project::factory()->create([
+            'user_id' => $this->user->id,
+            'lead_persona_id' => $this->persona->id,
+        ]);
         $brd = $this->createApprovedDraft($project, 'brd');
 
         $mock = $this->mock(GeminiGenerationService::class);
+        $mock->shouldReceive('forUser')->andReturnSelf();
         $mock->shouldReceive('streamStories')
-            ->andReturnUsing(function (string $brdContent, callable $cb) {
+            ->andReturnUsing(function ($sp, $brdContent, $ctx, callable $cb) {
                 $cb('Stories content');
             });
 
         $this->actingAs($this->user)
             ->postJson("/api/projects/{$project->id}/generate/stories", [
                 'brd_draft_id' => $brd->id,
+                'reviewer_persona_ids' => [],
             ])
             ->assertOk();
 
@@ -111,13 +126,17 @@ class GenerationTest extends TestCase
 
     public function test_spec_generation_passes_brd_and_stories_as_context(): void
     {
-        $project = Project::factory()->create(['user_id' => $this->user->id]);
+        $project = Project::factory()->create([
+            'user_id' => $this->user->id,
+            'lead_persona_id' => $this->persona->id,
+        ]);
         $brd = $this->createApprovedDraft($project, 'brd');
         $stories = $this->createApprovedDraft($project, 'stories');
 
         $mock = $this->mock(GeminiGenerationService::class);
+        $mock->shouldReceive('forUser')->andReturnSelf();
         $mock->shouldReceive('streamSpec')
-            ->andReturnUsing(function (string $b, string $s, callable $cb) {
+            ->andReturnUsing(function ($sp, $b, $s, $ctx, callable $cb) {
                 $cb('Spec content');
             });
 
@@ -125,6 +144,7 @@ class GenerationTest extends TestCase
             ->postJson("/api/projects/{$project->id}/generate/spec", [
                 'brd_draft_id' => $brd->id,
                 'stories_draft_id' => $stories->id,
+                'reviewer_persona_ids' => [],
             ])
             ->assertOk();
 
@@ -136,7 +156,9 @@ class GenerationTest extends TestCase
         $project = Project::factory()->create(); // another user
 
         $this->actingAs($this->user)
-            ->postJson("/api/projects/{$project->id}/generate/brd")
+            ->postJson("/api/projects/{$project->id}/generate/brd", [
+                'reviewer_persona_ids' => [],
+            ])
             ->assertForbidden();
     }
 }

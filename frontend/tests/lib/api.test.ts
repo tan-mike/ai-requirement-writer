@@ -5,6 +5,7 @@ describe('apiClient', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
     localStorage.clear()
+    vi.stubGlobal('location', { href: '' })
   })
 
   const mockJsonSuccess = (data: any) => ({
@@ -76,5 +77,19 @@ describe('apiClient', () => {
     const callArgs = vi.mocked(fetch).mock.calls[0][1] as RequestInit
     expect((callArgs.headers as Record<string, string>)['Content-Type']).toBeUndefined()
     expect(callArgs.body).toBeInstanceOf(FormData)
+  })
+
+  it('clears credentials and redirects on 401 response', async () => {
+    localStorage.setItem('token', 'stale-token')
+    localStorage.setItem('user', JSON.stringify({ name: 'User' }))
+    vi.mocked(fetch).mockResolvedValue(mockJsonError(401, { message: 'Unauthenticated.' }) as Response)
+
+    const locationMock = { href: '' }
+    vi.stubGlobal('location', locationMock)
+
+    await expect(apiClient.get('/projects')).rejects.toThrow('Unauthenticated.')
+    expect(localStorage.getItem('token')).toBeNull()
+    expect(localStorage.getItem('user')).toBeNull()
+    expect(locationMock.href).toBe('/login')
   })
 })

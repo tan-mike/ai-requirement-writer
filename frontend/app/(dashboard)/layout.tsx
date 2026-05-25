@@ -1,11 +1,14 @@
 'use client'
 import { useAuth } from '@/lib/auth'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { useEffect } from 'react'
+import Link from 'next/link'
+import TeamSwitcher from '@/components/TeamSwitcher'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     if (!loading && !user) router.push('/login')
@@ -15,15 +18,59 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!user) return null
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b px-6 py-3 flex justify-between items-center">
-        <span className="font-semibold text-gray-900">AI Requirement Writer</span>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-600">{user.name}</span>
-          <button onClick={logout} className="text-sm text-gray-500 hover:text-gray-900">Sign out</button>
+    <div className="min-h-screen bg-background">
+      <nav className="bg-surface border-b border-border sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16 items-center">
+            <div className="flex items-center gap-8">
+              <Link href="/dashboard" className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white font-bold">A</div>
+                <span className="font-bold text-lg tracking-tight text-foreground">AI Requirement Writer</span>
+              </Link>
+              <div className="hidden md:flex items-center gap-1">
+                <Link 
+                  href="/dashboard" 
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    pathname === '/dashboard' 
+                      ? 'text-primary bg-primary/5' 
+                      : 'text-muted hover:text-foreground hover:bg-surface-hover'
+                  }`}
+                >
+                  Projects
+                </Link>
+                <Link 
+                  href="/settings" 
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    pathname === '/settings' 
+                      ? 'text-primary bg-primary/5' 
+                      : 'text-muted hover:text-foreground hover:bg-surface-hover'
+                  }`}
+                >
+                  Settings
+                </Link>
+              </div>
+            </div>
+            <div className="flex items-center gap-6">
+              <TeamSwitcher />
+              <div className="hidden sm:flex flex-col items-end">
+                <span className="text-sm font-semibold text-foreground">{user.name}</span>
+                <span className="text-xs text-muted-foreground">{user.email}</span>
+              </div>
+              <button 
+                onClick={logout} 
+                className="text-sm font-medium text-muted hover:text-primary transition-colors px-3 py-1.5 rounded-md hover:bg-surface-hover"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
         </div>
       </nav>
-      <main className="max-w-5xl mx-auto px-6 py-8">{children}</main>
+      <main className="max-w-5xl mx-auto px-6 py-10">
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+          {children}
+        </div>
+      </main>
     </div>
   )
 }

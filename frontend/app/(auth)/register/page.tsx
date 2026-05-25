@@ -34,47 +34,65 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="bg-white p-8 rounded-lg shadow">
-      <h1 className="text-2xl font-semibold mb-6">Create account</h1>
-      {errors.general && <p className="text-red-600 text-sm mb-4">{errors.general}</p>}
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="card shadow-xl shadow-foreground/5 p-10">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-foreground">Create account</h1>
+        <p className="text-muted-foreground mt-1">Join us to start writing requirements efficiently.</p>
+      </div>
+      
+      {errors.general && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 mb-6">
+          <p className="text-red-700 dark:text-red-400 text-sm font-medium">{errors.general}</p>
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div>
-          <label htmlFor="name" className="block text-sm font-medium mb-1">Name</label>
+          <label htmlFor="name" className="block text-sm font-semibold text-foreground mb-1.5">Full Name</label>
           <input
             id="name" type="text" value={name}
             onChange={e => setName(e.target.value)}
-            className="w-full border rounded px-3 py-2 text-sm"
+            className="input"
+            placeholder="John Doe"
           />
-          {errors.name && <p className="text-red-600 text-xs mt-1">{errors.name}</p>}
+          {errors.name && <p className="text-red-600 dark:text-red-400 text-xs mt-1.5 font-medium">{errors.name}</p>}
         </div>
         <div>
-          <label htmlFor="email" className="block text-sm font-medium mb-1">Email</label>
+          <label htmlFor="email" className="block text-sm font-semibold text-foreground mb-1.5">Email</label>
           <input
             id="email" type="email" value={email}
             onChange={e => setEmail(e.target.value)}
-            className="w-full border rounded px-3 py-2 text-sm"
+            className="input"
+            placeholder="name@example.com"
           />
-          {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
+          {errors.email && <p className="text-red-600 dark:text-red-400 text-xs mt-1.5 font-medium">{errors.email}</p>}
         </div>
         <div>
-          <label htmlFor="password" className="block text-sm font-medium mb-1">Password</label>
+          <label htmlFor="password" className="block text-sm font-semibold text-foreground mb-1.5">Password</label>
           <input
             id="password" type="password" value={password}
             onChange={e => setPassword(e.target.value)}
-            className="w-full border rounded px-3 py-2 text-sm"
+            className="input"
+            placeholder="••••••••"
           />
-          {errors.password && <p className="text-red-600 text-xs mt-1">{errors.password}</p>}
+          {errors.password && <p className="text-red-600 dark:text-red-400 text-xs mt-1.5 font-medium">{errors.password}</p>}
         </div>
         <button
           type="submit" disabled={submitting}
-          className="w-full bg-blue-900 text-white rounded py-2 text-sm font-medium disabled:opacity-50"
+          className="btn-primary w-full py-2.5 mt-2"
         >
           {submitting ? 'Creating account...' : 'Create account'}
         </button>
       </form>
-      <p className="text-sm text-center mt-4">
-        Have an account? <Link href="/login" className="text-blue-900 underline">Sign in</Link>
-      </p>
+      
+      <div className="mt-8 pt-6 border-t border-border text-center">
+        <p className="text-sm text-muted-foreground">
+          Already have an account?{' '}
+          <Link href="/login" className="text-primary font-bold hover:underline underline-offset-4">
+            Sign in
+          </Link>
+        </p>
+      </div>
     </div>
   )
 }

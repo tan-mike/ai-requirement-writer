@@ -39,11 +39,13 @@ class ContextFileUploadTest extends TestCase
         Storage::fake('local');
         Queue::fake();
         $user = User::factory()->create();
+        $persona = \App\Models\Persona::create(['slug' => 'test', 'name' => 'Test', 'role' => 'lead', 'system_prompt' => '...']);
         
         $response = $this->actingAs($user)->postJson('/api/projects', [
             'name' => 'File Project',
             'type' => 'webapp',
             'context_file' => UploadedFile::fake()->create('context.md', 100),
+            'lead_persona_id' => $persona->id,
         ]);
 
         $response->assertStatus(201);

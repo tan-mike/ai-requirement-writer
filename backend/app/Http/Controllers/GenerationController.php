@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessCritiqueJob;
+use App\Models\Persona;
 use App\Models\Project;
+use App\Models\ProjectContext;
 use App\Models\RequirementDraft;
 use App\Services\GeminiGenerationService;
 use Illuminate\Http\Request;
@@ -14,95 +17,121 @@ class GenerationController extends Controller
 
     public function brd(Request $request, Project $project): StreamedResponse
     {
-        if ($project->user_id !== $request->user()->id) {
-            abort(403, 'Forbidden');
-        }
-
-        $intake = $project->intake;
-        $chatHistory = $project->chatMessages()->orderBy('order')->get();
-
-        if (! $intake && $chatHistory->isEmpty()) {
-            abort(422, 'Project intake or chat history is missing.');
-        }
-
-        $draft = $project->drafts()->create([
-            'type' => 'brd',
-            'version' => $this->nextVersion($project, 'brd'),
-            'content' => '',
-        ]);
-
-        return response()->stream(function () use ($intake, $chatHistory, $draft) {
-            try {
-                $accumulated = '';
-                $context = $intake ? $intake->fields : [];
-                
-                // If we have chat history, we should prioritize it or combine it.
-                // For simplicity, we'll pass both to a modified streamBrd method.
-                $this->gemini->streamBrd($context, $chatHistory->toArray(), function (string $chunk) use (&$accumulated) {
-                    $accumulated .= $chunk;
-                    echo 'data: ' . json_encode(['text' => $chunk]) . "\n\n";
-                    ob_flush();
-                    flush();
-                });
-                $draft->update(['content' => $accumulated]);
-                echo "data: [DONE]\n\n";
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::error('BRD generation failed: ' . $e->getMessage());
-                echo 'data: ' . json_encode(['error' => 'Generation failed: ' . $e->getMessage()]) . "\n\n";
-                echo "data: [DONE]\n\n";
-            }
-            ob_flush();
-            flush();
-        }, 200, [
-            'Content-Type' => 'text/event-stream',
-            'Cache-Control' => 'no-cache',
-            'X-Accel-Buffering' => 'no',
-        ]);
+        return $this->generate($request, $project, 'brd');
     }
 
     public function stories(Request $request, Project $project): StreamedResponse
     {
+        return $this->generate($request, $project, 'stories');
+    }
+
+    public function spec(Request $request, Project $project): StreamedResponse
+    {
+        return $this->generate($request, $project, 'spec');
+    }
+
+    private function generate(Request $request, Project $project, string $type): StreamedResponse
+    {
         if ($project->user_id !== $request->user()->id) {
             abort(403, 'Forbidden');
         }
 
         $request->validate([
-            'brd_draft_id' => ['required', 'integer'],
+            'reviewer_persona_ids' => ['nullable', 'array'],
+            'reviewer_persona_ids.*' => ['exists:personas,id'],
+            'context_ids' => ['nullable', 'array'],
+            'context_ids.*' => ['exists:project_contexts,id'],
+            'brd_draft_id' => $type !== 'brd' ? ['required', 'exists:requirement_drafts,id'] : ['nullable'],
+            'stories_draft_id' => $type === 'spec' ? ['required', 'exists:requirement_drafts,id'] : ['nullable'],
         ]);
 
-        $brdDraft = $project->drafts()->where('type', 'brd')->findOrFail($request->brd_draft_id);
+        set_time_limit(0);
 
-        if ($brdDraft->status !== 'approved') {
-            abort(422, 'BRD draft must be approved before generating stories.');
+        $this->gemini->forUser($request->user(), $project);
+
+        $leadPersona = $project->leadPersona;
+        if (!$leadPersona) {
+             // Fallback to general PM if not set (for legacy projects)
+             $leadPersona = Persona::where('slug', 'lead_general_pm')->first() ?? Persona::where('role', 'lead')->first();
         }
 
-        if (! $brdDraft->content) {
-            return response()->json(['message' => 'BRD draft has no content.'], 422);
+        $reviewers = Persona::whereIn('id', $request->reviewer_persona_ids ?? [])->get();
+        
+        // Merge project's linked contexts with any extra contexts provided in the request
+        $projectContexts = $project->projectContexts;
+        $requestContexts = ProjectContext::whereIn('id', $request->context_ids ?? [])->get();
+        $contexts = $projectContexts->concat($requestContexts)->unique('id');
+        
+        if ($type === 'stories') {
+            $brdDraft = RequirementDraft::findOrFail($request->brd_draft_id);
+            if ($brdDraft->status !== 'approved') {
+                abort(422, 'BRD draft must be approved before generating stories.');
+            }
+        }
+
+        if ($type === 'spec') {
+            $brdDraft = RequirementDraft::findOrFail($request->brd_draft_id);
+            $storiesDraft = RequirementDraft::findOrFail($request->stories_draft_id);
+            if ($brdDraft->status !== 'approved' || $storiesDraft->status !== 'approved') {
+                abort(422, 'BRD and User Stories drafts must be approved before generating spec.');
+            }
         }
 
         $draft = $project->drafts()->create([
-            'type' => 'stories',
-            'version' => $this->nextVersion($project, 'stories'),
+            'type' => $type,
+            'version' => $this->nextVersion($project, $type),
             'content' => '',
+            'status' => 'drafting',
+            'lead_persona_id' => $leadPersona->id,
+            'reviewer_persona_ids' => $reviewers->pluck('id')->toArray(),
+            'critiques' => [], // Cast handles this, but ensures it's {} in DB
         ]);
 
-        return response()->stream(function () use ($brdDraft, $draft) {
+        return response()->stream(function () use ($project, $draft, $leadPersona, $reviewers, $contexts, $type, $request) {
             try {
                 $accumulated = '';
-                $this->gemini->streamStories($brdDraft->content, function (string $chunk) use (&$accumulated) {
+                
+                $onChunk = function (string $chunk) use (&$accumulated) {
                     $accumulated .= $chunk;
                     echo 'data: ' . json_encode(['text' => $chunk]) . "\n\n";
-                    ob_flush();
+                    if (ob_get_level() > 0) ob_flush();
                     flush();
-                });
+                };
+
+                if ($type === 'brd') {
+                    $intake = $project->intake?->fields ?? [];
+                    $chatHistory = $project->chatMessages()->orderBy('order')->get()->toArray();
+                    $this->gemini->streamBrd($leadPersona->system_prompt, $intake, $chatHistory, $contexts->toArray(), $onChunk);
+                } elseif ($type === 'stories') {
+                    $brd = RequirementDraft::findOrFail($request->brd_draft_id)->content;
+                    $this->gemini->streamStories($leadPersona->system_prompt, $brd, $contexts->toArray(), $onChunk);
+                } elseif ($type === 'spec') {
+                    $brd = RequirementDraft::findOrFail($request->brd_draft_id)->content;
+                    $stories = RequirementDraft::findOrFail($request->stories_draft_id)->content;
+                    $this->gemini->streamSpec($leadPersona->system_prompt, $brd, $stories, $contexts->toArray(), $onChunk);
+                }
+
                 $draft->update(['content' => $accumulated]);
+
+                if ($reviewers->isNotEmpty()) {
+                    $draft->update(['status' => 'reviewing']);
+                    foreach ($reviewers as $reviewer) {
+                        ProcessCritiqueJob::dispatch($draft, $reviewer);
+                    }
+                    echo 'data: ' . json_encode(['status' => 'reviewing']) . "\n\n";
+                } else {
+                    $draft->update(['status' => 'approved']); // Auto-approve if no reviewers? Or stay 'draft'
+                    echo 'data: ' . json_encode(['status' => 'approved']) . "\n\n";
+                }
+
                 echo "data: [DONE]\n\n";
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::error('Stories generation failed: ' . $e->getMessage());
+                \Illuminate\Support\Facades\Log::error("{$type} generation failed: " . $e->getMessage());
+                $draft->update(['status' => 'failed']);
                 echo 'data: ' . json_encode(['error' => 'Generation failed: ' . $e->getMessage()]) . "\n\n";
                 echo "data: [DONE]\n\n";
             }
-            ob_flush();
+            if (ob_get_level() > 0) ob_flush();
             flush();
         }, 200, [
             'Content-Type' => 'text/event-stream',
@@ -111,55 +140,54 @@ class GenerationController extends Controller
         ]);
     }
 
-    public function spec(Request $request, Project $project): StreamedResponse
+    public function synthesize(Request $request, Project $project, RequirementDraft $draft): StreamedResponse
     {
-        if ($project->user_id !== $request->user()->id) {
-            abort(403, 'Forbidden');
+        if ($project->user_id !== $request->user()->id || $draft->project_id !== $project->id) {
+            abort(403);
         }
 
-        $request->validate([
-            'brd_draft_id' => ['required', 'integer'],
-            'stories_draft_id' => ['required', 'integer'],
-        ]);
-
-        $brdDraft = $project->drafts()->where('type', 'brd')->findOrFail($request->brd_draft_id);
-        $storiesDraft = $project->drafts()->where('type', 'stories')->findOrFail($request->stories_draft_id);
-
-        if ($brdDraft->status !== 'approved') {
-            abort(422, 'BRD draft must be approved before generating spec.');
+        if (!in_array($draft->status, ['refining', 'failed'])) {
+            abort(422, 'Draft is not ready for synthesis. Status: ' . $draft->status);
         }
 
-        if ($storiesDraft->status !== 'approved') {
-            abort(422, 'Stories draft must be approved before generating spec.');
-        }
+        set_time_limit(0);
+        $this->gemini->forUser($request->user(), $project);
+        
+        $leadPersona = $draft->leadPersona;
 
-        if (! $brdDraft->content || ! $storiesDraft->content) {
-            return response()->json(['message' => 'One or more drafts have no content.'], 422);
-        }
-
-        $draft = $project->drafts()->create([
-            'type' => 'spec',
-            'version' => $this->nextVersion($project, 'spec'),
-            'content' => '',
-        ]);
-
-        return response()->stream(function () use ($brdDraft, $storiesDraft, $draft) {
+        return response()->stream(function () use ($draft, $leadPersona) {
             try {
                 $accumulated = '';
-                $this->gemini->streamSpec($brdDraft->content, $storiesDraft->content, function (string $chunk) use (&$accumulated) {
-                    $accumulated .= $chunk;
-                    echo 'data: ' . json_encode(['text' => $chunk]) . "\n\n";
-                    ob_flush();
-                    flush();
-                });
-                $draft->update(['content' => $accumulated]);
+                $critiques = $draft->critiques()->with('persona')->get()
+                    ->pluck('content', 'persona.name')
+                    ->toArray();
+
+                $this->gemini->streamSynthesis(
+                    $leadPersona->system_prompt,
+                    $draft->content,
+                    $critiques,
+                    function (string $chunk) use (&$accumulated) {
+                        $accumulated .= $chunk;
+                        echo 'data: ' . json_encode(['text' => $chunk]) . "\n\n";
+                        if (ob_get_level() > 0) ob_flush();
+                        flush();
+                    },
+                    $draft->type
+                );
+
+                $draft->update([
+                    'content' => $accumulated,
+                    'status' => 'approved'
+                ]);
+                echo 'data: ' . json_encode(['status' => 'approved']) . "\n\n";
                 echo "data: [DONE]\n\n";
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::error('Spec generation failed: ' . $e->getMessage());
-                echo 'data: ' . json_encode(['error' => 'Generation failed: ' . $e->getMessage()]) . "\n\n";
+                \Illuminate\Support\Facades\Log::error('Synthesis failed: ' . $e->getMessage());
+                $draft->update(['status' => 'failed']);
+                echo 'data: ' . json_encode(['error' => 'Synthesis failed: ' . $e->getMessage()]) . "\n\n";
                 echo "data: [DONE]\n\n";
             }
-            ob_flush();
+            if (ob_get_level() > 0) ob_flush();
             flush();
         }, 200, [
             'Content-Type' => 'text/event-stream',
