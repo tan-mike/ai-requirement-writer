@@ -41,4 +41,13 @@ class ProcessContextFileJob implements ShouldQueue
             $this->project->update(['status' => Project::STATUS_FAILED]);
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        $this->project->update(['status' => Project::STATUS_FAILED]);
+        \Illuminate\Support\Facades\Log::error("Context File Job Failed Permanently: " . $exception->getMessage());
+    }
 }

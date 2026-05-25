@@ -50,4 +50,13 @@ class ProcessCritiqueJob implements ShouldQueue
             $this->draft->update(['status' => 'refining']);
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        $this->draft->update(['status' => 'failed']);
+        \Illuminate\Support\Facades\Log::error("Critique Job Failed Permanently: " . $exception->getMessage());
+    }
 }
