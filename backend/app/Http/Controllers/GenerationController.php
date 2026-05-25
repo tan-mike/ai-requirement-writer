@@ -47,7 +47,7 @@ class GenerationController extends Controller
 
         set_time_limit(0);
 
-        $this->gemini->forUser($request->user());
+        $this->gemini->forUser($request->user(), $project);
 
         $leadPersona = $project->leadPersona;
         if (!$leadPersona) {
@@ -151,7 +151,7 @@ class GenerationController extends Controller
         }
 
         set_time_limit(0);
-        $this->gemini->forUser($request->user());
+        $this->gemini->forUser($request->user(), $project);
         
         $leadPersona = $draft->leadPersona;
 

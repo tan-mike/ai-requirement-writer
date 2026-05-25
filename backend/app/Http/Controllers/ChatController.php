@@ -47,7 +47,7 @@ class ChatController extends Controller
         $architectureSummary = $project->architecture_summary ?? 'No existing architecture information available.';
         $systemPrompt = $project->leadPersona?->system_prompt ?? 'You are a Senior Technical Business Analyst and Principal Architect.';
 
-        $this->gemini->forUser($request->user());
+        $this->gemini->forUser($request->user(), $project);
 
         return response()->stream(function () use ($project, $systemPrompt, $architectureSummary, $history) {
             try {

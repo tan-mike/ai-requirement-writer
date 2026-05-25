@@ -25,7 +25,7 @@ class ProcessCritiqueJob implements ShouldQueue
     {
         set_time_limit(0); // Prevent premature killing
 
-        $gemini->forUser($this->draft->project->user);
+        $gemini->forUser($this->draft->project->user, $this->draft->project);
 
         $critiqueContent = $gemini->generateCritique(
             $this->reviewer->system_prompt,
