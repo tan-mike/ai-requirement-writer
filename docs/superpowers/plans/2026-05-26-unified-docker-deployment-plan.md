@@ -1,32 +1,29 @@
-# Unified Docker Deployment Implementation Plan
+# Unified Docker Deployment Implementation Plan (Next.js Standalone Mode)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a single Docker image containing the Next.js static frontend, Laravel backend, and configurable queue workers, served via Nginx.
+**Goal:** Build a single Docker image containing the Next.js standalone frontend, Laravel backend, and configurable queue workers, served via Nginx.
 
-**Architecture:** Multi-stage Docker build producing an Alpine-based image running Nginx, PHP-FPM, and Supervisor.
+**Architecture:** Multi-stage Docker build producing an Alpine-based image running Nginx, Node.js, PHP-FPM, and Supervisor.
 
-**Tech Stack:** Docker, Nginx, PHP 8.3-FPM, Supervisor, Node.js (build-time).
+**Tech Stack:** Docker, Nginx, Node.js, PHP 8.3-FPM, Supervisor.
 
 ---
 
-### Task 1: Frontend Static Export Configuration
+### Task 1: Frontend Standalone Configuration
 
 **Files:**
 - Modify: `frontend/next.config.ts`
 
 - [ ] **Step 1: Update Next.js config**
 
-Add `output: 'export'` and disable image optimization.
+Add `output: 'standalone'`.
 
 ```typescript
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: 'export',
-  images: {
-    unoptimized: true,
-  },
+  output: 'standalone',
 };
 
 export default nextConfig;
@@ -35,13 +32,13 @@ export default nextConfig;
 - [ ] **Step 2: Verify build command locally**
 
 Run: `cd frontend && npm run build`
-Expected: `frontend/out` directory created with static files.
+Expected: `.next/standalone` directory created.
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add frontend/next.config.ts
-git commit -m "chore(frontend): enable static export for docker deployment"
+git commit -m "chore(frontend): enable standalone output for docker deployment"
 ```
 
 ---
@@ -68,7 +65,7 @@ Ensure Laravel allows requests from the same origin.
 // backend/config/cors.php
 'paths' => ['api/*', 'sanctum/csrf-cookie'],
 'allowed_methods' => ['*'],
-'allowed_origins' => ['*'], // In unified deployment, origin is same as backend
+'allowed_origins' => ['*'], 
 ```
 
 - [ ] **Step 3: Commit**
@@ -92,15 +89,24 @@ git commit -m "chore: use relative API paths for unified deployment"
 ```nginx
 server {
     listen 80;
-    root /var/www/html/public_frontend;
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ /index.html;
+    
+    # Static assets (Next.js)
+    location /_next/static {
+        alias /var/www/html/frontend/.next/static;
+        expires 365d;
+        access_log off;
     }
 
+    # Public files (Next.js)
+    location /static {
+        alias /var/www/html/frontend/public;
+        expires 365d;
+        access_log off;
+    }
+
+    # API Proxy
     location ~ ^/(api|sanctum) {
-        root /var/www/html/public;
+        root /var/www/html/backend/public;
         try_files $uri /index.php?$query_string;
         
         location ~ \.php$ {
@@ -108,6 +114,16 @@ server {
             fastcgi_pass 127.0.0.1:9000;
             fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         }
+    }
+
+    # Frontend Proxy (Next.js Standalone)
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
     }
 }
 ```
@@ -120,6 +136,16 @@ nodaemon=true
 user=root
 logfile=/var/log/supervisor/supervisord.log
 pidfile=/var/run/supervisord.pid
+
+[program:next-app]
+command=node /var/www/html/frontend/server.js
+autostart=true
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+environment=NODE_ENV=production,PORT=3000
 
 [program:php-fpm]
 command=php-fpm83 -F
@@ -136,7 +162,7 @@ stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
 
 [program:laravel-worker]
-command=php /var/www/html/artisan queue:work --sleep=3 --tries=3 --max-time=3600
+command=php /var/www/html/backend/artisan queue:work --sleep=3 --tries=3 --max-time=3600
 autostart=true
 autorestart=true
 user=www-data
@@ -157,8 +183,8 @@ stderr_logfile_maxbytes=0
 WORKER_COUNT=${QUEUE_WORKER_COUNT:-1}
 sed -i "s/numprocs=1/numprocs=$WORKER_COUNT/" /etc/supervisor/conf.d/supervisord.conf
 
-# Run migrations (optional but recommended for monolith)
-php /var/www/html/artisan migrate --force
+# Run migrations
+php /var/www/html/backend/artisan migrate --force
 
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
 ```
@@ -167,7 +193,7 @@ exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
 
 ```bash
 git add docker/
-git commit -m "infra: add nginx, supervisor, and entrypoint configs"
+git commit -m "infra: add nginx, supervisor, and entrypoint configs for standalone mode"
 ```
 
 ---
@@ -198,15 +224,17 @@ COPY backend/ .
 
 # Stage 3: Runtime
 FROM php:8.3-fpm-alpine
-RUN apk add --no-cache nginx supervisor
+RUN apk add --no-cache nginx supervisor nodejs
 WORKDIR /var/www/html
 
-# Copy Frontend
-COPY --from=frontend-build /app/out /var/www/html/public_frontend
+# Copy Frontend Standalone
+COPY --from=frontend-build /app/.next/standalone /var/www/html/frontend
+COPY --from=frontend-build /app/.next/static /var/www/html/frontend/.next/static
+COPY --from=frontend-build /app/public /var/www/html/frontend/public
 
 # Copy Backend
-COPY --from=backend-build /var/www/html /var/www/html
-RUN chown -R www-data:www-data storage bootstrap/cache
+COPY --from=backend-build /var/www/html /var/www/html/backend
+RUN chown -R www-data:www-data /var/www/html/backend/storage /var/www/html/backend/bootstrap/cache
 
 # Configs
 COPY docker/nginx.conf /etc/nginx/http.d/default.conf
@@ -222,5 +250,5 @@ ENTRYPOINT ["entrypoint.sh"]
 
 ```bash
 git add Dockerfile
-git commit -m "infra: add unified multi-stage Dockerfile"
+git commit -m "infra: add unified multi-stage Dockerfile for standalone mode"
 ```

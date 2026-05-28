@@ -24,35 +24,50 @@ Automated tool to generate Business Requirements Documents (BRD), User Stories, 
 
 ---
 
-## Setup & Local Development
+## Setup & Deployment
 
-### Prerequisites
+### Option 1: Local Development (Manual)
 
-- PHP 8.3+
-- Composer
-- Node.js 20+ & NPM
-- Git (for repository analysis)
-- Google Gemini API Key ([Get one here](https://aistudio.google.com/app/apikey))
+Best for development and active contribution.
 
-### Backend Setup
+**Backend:**
+1. `cd backend && composer install`
+2. `cp .env.example .env` (Set `GEMINI_API_KEY`)
+3. `php artisan key:generate`
+4. `php artisan migrate --seed`
+5. `php artisan queue:listen --timeout=3600` (In a separate terminal)
+6. `php artisan serve` (Runs on `http://localhost:8000`)
 
-1. `cd backend`
-2. `composer install`
-3. `cp .env.example .env`
-4. Set your `GEMINI_API_KEY` in `.env`
-5. `php artisan key:generate`
-6. `touch database/database.sqlite` (if using SQLite)
-7. `php artisan migrate --seed`
-8. **Seed Personas:** `php artisan db:seed --class=PersonaSeeder`
-9. **Run the Queue:** `php artisan queue:listen --timeout=3600` (Required for repository analysis and agentic reviews).
-    *   *Scale:* You can safely run multiple queue workers in parallel to speed up multi-persona reviews; the system uses atomic database updates to prevent race conditions.
-10. **Start Server:** `php artisan serve` (Runs on `http://localhost:8000`)
+**Frontend:**
+1. `cd frontend && npm install`
+2. `npm run dev` (Runs on `http://localhost:3000`)
 
-### Frontend Setup
+---
 
-1. `cd frontend`
-2. `npm install`
-3. `npm run dev` (Runs on `http://localhost:3000`)
+### Option 2: Docker / Hosted (Unified)
+
+Best for production, internal team hosting, or quick evaluation. This builds the frontend and backend into a **single container** served from a **single address**.
+
+1. **Build the image:**
+   ```bash
+   docker build -t ai-requirement-writer .
+   ```
+
+2. **Run the container:**
+   ```bash
+   docker run -p 80:80 \
+     -e GEMINI_API_KEY=your_key_here \
+     -e DB_CONNECTION=mysql \
+     -e DB_HOST=your_rds_host \
+     -e QUEUE_WORKER_COUNT=4 \
+     ai-requirement-writer
+   ```
+
+**Features of the Unified Docker Image:**
+- **Single Port:** Everything (Frontend + API) is served on port 80.
+- **Standalone Frontend:** Next.js runs in standalone mode for full dynamic route support.
+- **Auto-Scale Workers:** Set `QUEUE_WORKER_COUNT` to handle concurrent AI reviews.
+- **Self-Healing:** Managed by Supervisor inside the container.
 
 ---
 
