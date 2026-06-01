@@ -14,12 +14,27 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'role', 'free_tier', 'gemini_api_key', 'tour_flags', 'current_team_id'])]
-#[Hidden(['password', 'remember_token', 'gemini_api_key'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
+
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+        'role',
+        'free_tier',
+        'gemini_api_key',
+        'tour_flags',
+        'current_team_id'
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+        'gemini_api_key'
+    ];
 
     /**
      * Default attribute values — ensures role is included in serialization.
