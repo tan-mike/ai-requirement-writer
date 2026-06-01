@@ -50,7 +50,7 @@ class RequirementDraft extends Model
 
     public function scopeApproved(Builder $query): Builder
     {
-        return $query->where('status', 'approved');
+        return $query->whereIn('status', ['approved', 'committed']);
     }
 
     public function approve(): void

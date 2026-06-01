@@ -64,7 +64,7 @@ class GenerationController extends Controller
         
         if ($type === 'stories') {
             $brdDraft = RequirementDraft::findOrFail($request->brd_draft_id);
-            if ($brdDraft->status !== 'approved') {
+            if (!in_array($brdDraft->status, ['approved', 'committed'])) {
                 abort(422, 'BRD draft must be approved before generating stories.');
             }
         }
@@ -72,7 +72,7 @@ class GenerationController extends Controller
         if ($type === 'spec') {
             $brdDraft = RequirementDraft::findOrFail($request->brd_draft_id);
             $storiesDraft = RequirementDraft::findOrFail($request->stories_draft_id);
-            if ($brdDraft->status !== 'approved' || $storiesDraft->status !== 'approved') {
+            if (!in_array($brdDraft->status, ['approved', 'committed']) || !in_array($storiesDraft->status, ['approved', 'committed'])) {
                 abort(422, 'BRD and User Stories drafts must be approved before generating spec.');
             }
         }
@@ -114,20 +114,29 @@ class GenerationController extends Controller
                 $draft->update(['content' => $accumulated]);
 
                 if ($reviewers->isNotEmpty()) {
-                    $draft->update(['status' => 'reviewing']);
+                    app(\App\Services\GraphOrchestratorService::class)->transition($project, 'reviewing', [
+                        'active_draft_id' => $draft->id,
+                        'reviewer_ids' => $reviewers->pluck('id')->toArray()
+                    ]);
+                    
                     foreach ($reviewers as $reviewer) {
                         ProcessCritiqueJob::dispatch($draft, $reviewer);
                     }
                     echo 'data: ' . json_encode(['status' => 'reviewing']) . "\n\n";
                 } else {
-                    $draft->update(['status' => 'approved']); // Auto-approve if no reviewers? Or stay 'draft'
+                    app(\App\Services\GraphOrchestratorService::class)->transition($project, 'approved', [
+                        'active_draft_id' => $draft->id
+                    ]);
                     echo 'data: ' . json_encode(['status' => 'approved']) . "\n\n";
                 }
 
                 echo "data: [DONE]\n\n";
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::error("{$type} generation failed: " . $e->getMessage());
-                $draft->update(['status' => 'failed']);
+                app(\App\Services\GraphOrchestratorService::class)->transition($project, 'failed', [
+                    'active_draft_id' => $draft->id,
+                    'error' => $e->getMessage()
+                ]);
                 echo 'data: ' . json_encode(['error' => 'Generation failed: ' . $e->getMessage()]) . "\n\n";
                 echo "data: [DONE]\n\n";
             }
@@ -155,7 +164,7 @@ class GenerationController extends Controller
         
         $leadPersona = $draft->leadPersona;
 
-        return response()->stream(function () use ($draft, $leadPersona) {
+        return response()->stream(function () use ($project, $draft, $leadPersona) {
             try {
                 $accumulated = '';
                 $critiques = $draft->critiques()->with('persona')->get()
@@ -176,14 +185,21 @@ class GenerationController extends Controller
                 );
 
                 $draft->update([
-                    'content' => $accumulated,
-                    'status' => 'approved'
+                    'content' => $accumulated
                 ]);
+
+                app(\App\Services\GraphOrchestratorService::class)->transition($project, 'approved', [
+                    'active_draft_id' => $draft->id
+                ]);
+
                 echo 'data: ' . json_encode(['status' => 'approved']) . "\n\n";
                 echo "data: [DONE]\n\n";
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::error('Synthesis failed: ' . $e->getMessage());
-                $draft->update(['status' => 'failed']);
+                app(\App\Services\GraphOrchestratorService::class)->transition($project, 'failed', [
+                    'active_draft_id' => $draft->id,
+                    'error' => $e->getMessage()
+                ]);
                 echo 'data: ' . json_encode(['error' => 'Synthesis failed: ' . $e->getMessage()]) . "\n\n";
                 echo "data: [DONE]\n\n";
             }

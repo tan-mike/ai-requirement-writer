@@ -84,4 +84,14 @@ class Project extends Model implements Auditable
     {
         return $this->belongsToMany(ProjectContext::class, 'project_project_context');
     }
+
+    public function knowledgeModules(): HasMany
+    {
+        return $this->hasMany(ProjectKnowledgeModule::class);
+    }
+
+    public function stateGraph(): HasOne
+    {
+        return $this->hasOne(ProjectStateGraph::class);
+    }
 }

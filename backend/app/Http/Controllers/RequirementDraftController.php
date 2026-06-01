@@ -62,23 +62,13 @@ class RequirementDraftController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $draft->approve();
-
-        $this->checkProjectCompletion($project);
-
-        return response()->json(['data' => $draft->fresh()]);
-    }
-
-    private function checkProjectCompletion(Project $project): void
-    {
-        $requiredTypes = ['brd', 'stories', 'spec'];
-
-        $allApproved = collect($requiredTypes)->every(function ($type) use ($project) {
-            return $project->drafts()->where('type', $type)->where('status', 'approved')->exists();
-        });
-
-        if ($allApproved) {
-            $project->update(['status' => Project::STATUS_COMPLETE]);
+        try {
+            app(\App\Services\GraphOrchestratorService::class)->transition($project, 'committed', [
+                'active_draft_id' => $draft->id
+            ]);
+            return response()->json(['data' => $draft->fresh()]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Failed to approve and commit: ' . $e->getMessage()], 500);
         }
     }
 }

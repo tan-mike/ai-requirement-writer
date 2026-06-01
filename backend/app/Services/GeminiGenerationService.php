@@ -10,6 +10,7 @@ use Gemini\Data\Content;
 use Gemini\Enums\Role;
 use Gemini\Laravel\Facades\Gemini;
 use Illuminate\Support\Facades\Log;
+use App\Services\MemoryGovernorService;
 
 class GeminiGenerationService
 {
@@ -18,6 +19,12 @@ class GeminiGenerationService
     private ?Project $currentProject = null;
     private ?Client $customClient = null;
     private bool $effectiveFreeTier = false;
+    protected MemoryGovernorService $memory;
+
+    public function __construct(MemoryGovernorService $memory)
+    {
+        $this->memory = $memory;
+    }
 
     /**
      * Configure the service for a specific user and project context.
@@ -351,6 +358,12 @@ class GeminiGenerationService
      */
     private function streamGeneration(string $systemPrompt, string $userPrompt, callable $onChunk, string $type = 'document'): void
     {
+        if ($this->currentProject) {
+            $modules = $this->memory->getRelevantContext($this->currentProject, $userPrompt);
+            $context = $this->memory->formatContextForPrompt($modules);
+            $systemPrompt = "SHARED PROJECT CONTEXT:\n{$context}\n\n---\n\n" . $systemPrompt;
+        }
+
         if ($this->effectiveFreeTier) {
             sleep(1); // Throttling for free tier start
         }

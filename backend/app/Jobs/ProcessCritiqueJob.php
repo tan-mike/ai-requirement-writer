@@ -47,7 +47,10 @@ class ProcessCritiqueJob implements ShouldQueue
         $completedCount = $this->draft->critiques()->where('status', 'completed')->count();
 
         if ($completedCount === $totalExpected) {
-            $this->draft->update(['status' => 'refining']);
+            app(\App\Services\GraphOrchestratorService::class)->transition($this->draft->project, 'refining', [
+                'last_review_completed_at' => now()->toDateTimeString(),
+                'active_draft_id' => $this->draft->id
+            ]);
         }
     }
 
