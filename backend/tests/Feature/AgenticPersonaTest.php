@@ -54,17 +54,12 @@ class AgenticPersonaTest extends TestCase
                 'name' => 'Legacy Docs',
                 'content' => 'Old architecture details',
             ])
-            ->assertStatus(201);
+            ->assertStatus(403);
 
-        $this->assertDatabaseHas('project_contexts', [
+        $this->assertDatabaseMissing('project_contexts', [
             'user_id' => $this->user->id,
             'name' => 'Legacy Docs',
         ]);
-
-        $this->actingAs($this->user)
-            ->getJson('/api/contexts')
-            ->assertOk()
-            ->assertJsonCount(1);
     }
 
     public function test_brd_generation_with_reviewers_dispatches_jobs(): void

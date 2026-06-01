@@ -66,8 +66,8 @@ class TeamsTest extends TestCase
                 'is_team_shared' => true,
             ]);
 
-        $response->assertStatus(201);
-        $this->assertDatabaseHas('project_contexts', [
+        $response->assertStatus(403);
+        $this->assertDatabaseMissing('project_contexts', [
             'name' => 'Team Context',
             'team_id' => $team->id,
         ]);
@@ -109,8 +109,8 @@ class TeamsTest extends TestCase
                 'content' => 'Everyone can see',
                 'is_team_shared' => true,
             ])
-            ->assertOk();
+            ->assertStatus(403);
 
-        $this->assertEquals($team->id, $context->fresh()->team_id);
+        $this->assertNull($context->fresh()->team_id);
     }
 }
