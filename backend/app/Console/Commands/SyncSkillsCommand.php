@@ -15,5 +15,9 @@ class SyncSkillsCommand extends Command
         $this->info('Starting skills sync...');
         SyncSkillsFromGoogleDriveJob::dispatchSync();
         $this->info('Skills sync completed.');
+
+        $this->info('Starting contexts sync...');
+        \App\Jobs\SyncContextsFromGoogleDriveJob::dispatchSync();
+        $this->info('Contexts sync completed.');
     }
 }
