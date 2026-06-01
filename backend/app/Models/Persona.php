@@ -33,10 +33,7 @@ class Persona extends Model
 
     public function scopeVisibleTo(Builder $query, ?int $userId = null): Builder
     {
-        return $query->where(function (Builder $q) use ($userId) {
-            $q->whereNull('user_id')
-              ->orWhere('is_global', true)
-              ->when($userId, fn($sq) => $sq->orWhere('user_id', $userId));
-        });
+        // Return all personas globally, ignoring user ownership
+        return $query;
     }
 }

@@ -20,7 +20,7 @@ class SkillUploadTest extends TestCase
         $this->user = User::factory()->create();
     }
 
-    public function test_user_can_upload_private_skill(): void
+    public function test_user_cannot_upload_private_skill(): void
     {
         $json = json_encode([
             'name' => 'Private Auditor',
@@ -37,15 +37,13 @@ class SkillUploadTest extends TestCase
                 'is_global' => false,
             ]);
 
-        $response->assertStatus(201);
-        $this->assertDatabaseHas('personas', [
+        $response->assertStatus(403);
+        $this->assertDatabaseMissing('personas', [
             'name' => 'Private Auditor',
-            'user_id' => $this->user->id,
-            'is_global' => false,
         ]);
     }
 
-    public function test_user_can_upload_global_skill(): void
+    public function test_user_cannot_upload_global_skill(): void
     {
         $json = json_encode([
             'name' => 'Global Expert',
@@ -61,15 +59,13 @@ class SkillUploadTest extends TestCase
                 'is_global' => true,
             ]);
 
-        $response->assertStatus(201);
-        $this->assertDatabaseHas('personas', [
+        $response->assertStatus(403);
+        $this->assertDatabaseMissing('personas', [
             'name' => 'Global Expert',
-            'user_id' => $this->user->id,
-            'is_global' => true,
         ]);
     }
 
-    public function test_visibility_logic_blends_skills_correctly(): void
+    public function test_visibility_logic_sees_all_personas(): void
     {
         // 1. System default
         Persona::create(['name' => 'System', 'slug' => 'sys', 'role' => 'lead', 'system_prompt' => '...', 'is_global' => true]);
@@ -78,7 +74,7 @@ class SkillUploadTest extends TestCase
         $otherUser = User::factory()->create();
         Persona::create(['name' => 'Other Global', 'slug' => 'og', 'role' => 'lead', 'system_prompt' => '...', 'user_id' => $otherUser->id, 'is_global' => true]);
         
-        // 3. Other user's private skill (should NOT be visible)
+        // 3. Other user's private skill (should NOW be visible)
         Persona::create(['name' => 'Other Private', 'slug' => 'op', 'role' => 'lead', 'system_prompt' => '...', 'user_id' => $otherUser->id, 'is_global' => false]);
         
         // 4. Current user's private skill
@@ -87,11 +83,11 @@ class SkillUploadTest extends TestCase
         $response = $this->actingAs($this->user)->getJson('/api/personas');
 
         $response->assertOk()
-            ->assertJsonCount(3) // System + Other Global + My Private
+            ->assertJsonCount(4) // All visible
             ->assertJsonFragment(['name' => 'System'])
             ->assertJsonFragment(['name' => 'Other Global'])
             ->assertJsonFragment(['name' => 'My Private'])
-            ->assertJsonMissing(['name' => 'Other Private']);
+            ->assertJsonFragment(['name' => 'Other Private']);
     }
 
     public function test_user_skills_index_visibility_logic(): void
@@ -103,7 +99,7 @@ class SkillUploadTest extends TestCase
         $otherUser = User::factory()->create();
         Persona::create(['name' => 'Other Global', 'slug' => 'og', 'role' => 'lead', 'system_prompt' => '...', 'user_id' => $otherUser->id, 'is_global' => true]);
 
-        // 3. Other user's private skill (should NOT be visible)
+        // 3. Other user's private skill (should NOW be visible)
         Persona::create(['name' => 'Other Private', 'slug' => 'op', 'role' => 'lead', 'system_prompt' => '...', 'user_id' => $otherUser->id, 'is_global' => false]);
 
         // 4. Current user's private skill
@@ -112,11 +108,11 @@ class SkillUploadTest extends TestCase
         $response = $this->actingAs($this->user)->getJson('/api/user/skills');
 
         $response->assertOk()
-            ->assertJsonCount(3, 'data') // System + Other Global + My Private
+            ->assertJsonCount(4, 'data') // All visible
             ->assertJsonFragment(['name' => 'System'])
             ->assertJsonFragment(['name' => 'Other Global'])
             ->assertJsonFragment(['name' => 'My Private'])
-            ->assertJsonMissing(['name' => 'Other Private']);
+            ->assertJsonFragment(['name' => 'Other Private']);
     }
 
     public function test_user_cannot_delete_system_skills(): void
@@ -138,14 +134,14 @@ class SkillUploadTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_user_can_delete_own_skills(): void
+    public function test_user_cannot_delete_own_skills(): void
     {
         $mySkill = Persona::create(['name' => 'Mine', 'slug' => 'mine', 'role' => 'lead', 'system_prompt' => '...', 'user_id' => $this->user->id]);
 
         $this->actingAs($this->user)
             ->deleteJson("/api/user/skills/{$mySkill->id}")
-            ->assertStatus(204);
+            ->assertForbidden();
 
-        $this->assertDatabaseMissing('personas', ['id' => $mySkill->id]);
+        $this->assertDatabaseHas('personas', ['id' => $mySkill->id]);
     }
 }
