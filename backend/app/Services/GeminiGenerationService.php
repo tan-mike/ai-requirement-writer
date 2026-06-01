@@ -255,14 +255,38 @@ class GeminiGenerationService
      */
     public function streamDiscoveryChat(string $systemPrompt, string $architectureSummary, array $history, callable $onChunk): void
     {
-        $globalContexts = $this->getGlobalContexts();
+        $hierarchy = [];
+        
+        // 1. Company Context
+        $companyCtx = $this->getCompanyContext();
+        if ($companyCtx) {
+            $hierarchy[] = "### COMPANY CONTEXT\n" . $companyCtx;
+        }
+
+        // 2. Module Context
+        $moduleCtx = $this->getModuleContexts();
+        if ($moduleCtx) {
+            $hierarchy[] = "### MODULE CONTEXT\n" . $moduleCtx;
+        }
+
+        // 3. Project Memory (RAG)
+        if ($this->currentProject) {
+            $lastUserMsg = collect($history)->where('role', 'user')->last()['content'] ?? '';
+            $ragModules = $this->memory->getRelevantContext($this->currentProject, $lastUserMsg);
+            $ragContext = $this->memory->formatContextForPrompt($ragModules);
+            if ($ragContext) {
+                $hierarchy[] = "### PROJECT MEMORY\n" . $ragContext;
+            }
+        }
+
+        $hierarchyStr = !empty($hierarchy) ? implode("\n\n---\n\n", $hierarchy) . "\n\n---\n\n" : "";
 
         $rules = "
         
         EXISTING ARCHITECTURE:
         {$architectureSummary}
         
-        {$globalContexts}
+        {$hierarchyStr}
         
         INTERVIEW RULES:
         - You are currently in a 'Discovery Interview' mode. Your goal is to grill the user's requirements to find the real need.
@@ -355,15 +379,31 @@ class GeminiGenerationService
      */
     private function streamGeneration(string $systemPrompt, string $userPrompt, callable $onChunk, string $type = 'document'): void
     {
-        $globalContexts = $this->getGlobalContexts();
-        if (!empty($globalContexts)) {
-            $systemPrompt = "GLOBAL MANDATES:\n{$globalContexts}\n\n---\n\n" . $systemPrompt;
+        $hierarchy = [];
+        
+        // 1. Company Context (Universal)
+        $companyCtx = $this->getCompanyContext();
+        if ($companyCtx) {
+            $hierarchy[] = "### COMPANY CONTEXT (Universal Mandates)\n" . $companyCtx;
         }
 
+        // 2. Module Context (Project Attached)
+        $moduleCtx = $this->getModuleContexts();
+        if ($moduleCtx) {
+            $hierarchy[] = "### MODULE CONTEXT (Project-Specific Guides)\n" . $moduleCtx;
+        }
+
+        // 3. Project Memory (RAG)
         if ($this->currentProject) {
-            $modules = $this->memory->getRelevantContext($this->currentProject, $userPrompt);
-            $context = $this->memory->formatContextForPrompt($modules);
-            $systemPrompt = "SHARED PROJECT CONTEXT:\n{$context}\n\n---\n\n" . $systemPrompt;
+            $ragModules = $this->memory->getRelevantContext($this->currentProject, $userPrompt);
+            $ragContext = $this->memory->formatContextForPrompt($ragModules);
+            if ($ragContext) {
+                $hierarchy[] = "### PROJECT MEMORY (Related Historical Data)\n" . $ragContext;
+            }
+        }
+
+        if (!empty($hierarchy)) {
+            $systemPrompt = implode("\n\n---\n\n", $hierarchy) . "\n\n---\n\n" . $systemPrompt;
         }
 
         if ($this->effectiveFreeTier) {
@@ -481,16 +521,34 @@ class GeminiGenerationService
     }
 
     /**
-     * Get all global project contexts formatted for prompts.
+     * Get all company-wide global contexts formatted for prompts.
      */
-    private function getGlobalContexts(): string
+    private function getCompanyContext(): string
     {
         $contexts = \App\Models\ProjectContext::where('is_global', true)->get();
         if ($contexts->isEmpty()) {
             return "";
         }
         
-        return $contexts->map(fn($ctx) => "### Global Mandate: {$ctx->name}\n{$ctx->content}")
+        return $contexts->map(fn($ctx) => "### Company Context: {$ctx->name}\n{$ctx->content}")
+            ->implode("\n\n");
+    }
+
+    /**
+     * Get all project-attached module contexts formatted for prompts.
+     */
+    private function getModuleContexts(): string
+    {
+        if (!$this->currentProject) {
+            return "";
+        }
+
+        $contexts = $this->currentProject->projectContexts()->where('is_global', false)->get();
+        if ($contexts->isEmpty()) {
+            return "";
+        }
+
+        return $contexts->map(fn($ctx) => "### Module: {$ctx->name}\n{$ctx->content}")
             ->implode("\n\n");
     }
 

@@ -14,7 +14,7 @@ class GeminiGenerationServiceContextTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_get_global_contexts_returns_formatted_string(): void
+    public function test_get_company_context_returns_formatted_string(): void
     {
         $user = User::factory()->create();
         
@@ -25,31 +25,38 @@ class GeminiGenerationServiceContextTest extends TestCase
             'is_global' => true,
         ]);
 
-        ProjectContext::create([
-            'user_id' => $user->id,
-            'name' => 'UX Standard',
-            'content' => 'Mobile first.',
-            'is_global' => true,
-        ]);
-
-        ProjectContext::create([
-            'user_id' => $user->id,
-            'name' => 'Local Context',
-            'content' => 'Ignore me.',
-            'is_global' => false,
-        ]);
-
         $service = app(GeminiGenerationService::class);
         
-        $method = new ReflectionMethod(GeminiGenerationService::class, 'getGlobalContexts');
+        $method = new ReflectionMethod(GeminiGenerationService::class, 'getCompanyContext');
         $method->setAccessible(true);
         $result = $method->invoke($service);
 
-        $this->assertStringContainsString('### Global Mandate: Security Policy', $result);
+        $this->assertStringContainsString('### Company Context: Security Policy', $result);
         $this->assertStringContainsString('Always use HTTPS.', $result);
-        $this->assertStringContainsString('### Global Mandate: UX Standard', $result);
-        $this->assertStringContainsString('Mobile first.', $result);
-        $this->assertStringNotContainsString('Local Context', $result);
-        $this->assertStringNotContainsString('Ignore me.', $result);
+    }
+
+    public function test_get_module_contexts_returns_formatted_string(): void
+    {
+        $user = User::factory()->create();
+        $project = \App\Models\Project::factory()->create(['user_id' => $user->id]);
+        
+        $context = ProjectContext::create([
+            'user_id' => $user->id,
+            'name' => 'Legacy Auth',
+            'content' => 'Use SOAP.',
+            'is_global' => false,
+        ]);
+
+        $project->projectContexts()->attach($context->id);
+
+        $service = app(GeminiGenerationService::class);
+        $service->forUser($user, $project);
+        
+        $method = new ReflectionMethod(GeminiGenerationService::class, 'getModuleContexts');
+        $method->setAccessible(true);
+        $result = $method->invoke($service);
+
+        $this->assertStringContainsString('### Module: Legacy Auth', $result);
+        $this->assertStringContainsString('Use SOAP.', $result);
     }
 }
