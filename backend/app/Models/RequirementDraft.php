@@ -17,6 +17,8 @@ class RequirementDraft extends Model
         'project_id',
         'type',
         'version',
+        'title',
+        'description',
         'content',
         'status',
         'lead_persona_id',
