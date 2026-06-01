@@ -75,7 +75,7 @@ class TeamsTest extends TestCase
 
     public function test_team_members_can_see_shared_projects(): void
     {
-        $member = User::factory()->create();
+        $member = User::factory()->create(['role' => 'admin']);
         $team = Team::create(['name' => 'Delta Team', 'code' => 'DELTA1', 'owner_id' => $this->user->id]);
         $team->users()->attach([$this->user->id, $member->id]);
         
