@@ -17,6 +17,12 @@ class ProjectContext extends Model implements Auditable
         'name',
         'content',
         'type',
+        'google_drive_id',
+        'is_global',
+    ];
+
+    protected $casts = [
+        'is_global' => 'boolean',
     ];
 
     public function user(): BelongsTo
