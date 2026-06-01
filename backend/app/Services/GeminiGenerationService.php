@@ -255,17 +255,14 @@ class GeminiGenerationService
      */
     public function streamDiscoveryChat(string $systemPrompt, string $architectureSummary, array $history, callable $onChunk): void
     {
-        // Strip generation-only mandates from the system prompt if they exist
-        $cleanSystemPrompt = str_replace(
-            "CRITICAL MANDATE: Output ONLY the markdown document. Do NOT include any conversational preamble, internal reasoning, or concluding remarks. Start your response immediately with the first markdown heading (e.g., '# ' or '## ').",
-            "",
-            $systemPrompt
-        );
+        $globalContexts = $this->getGlobalContexts();
 
         $rules = "
         
         EXISTING ARCHITECTURE:
         {$architectureSummary}
+        
+        {$globalContexts}
         
         INTERVIEW RULES:
         - You are currently in a 'Discovery Interview' mode. Your goal is to grill the user's requirements to find the real need.
@@ -281,7 +278,7 @@ class GeminiGenerationService
         - Be direct, professional, and conversational.
         ";
 
-        $fullSystemPrompt = trim($cleanSystemPrompt) . "\n\n" . trim($rules);
+        $fullSystemPrompt = trim($systemPrompt) . "\n\n" . trim($rules);
 
         $historyCollection = collect($history);
         $lastMessage = $historyCollection->pop();
@@ -358,6 +355,11 @@ class GeminiGenerationService
      */
     private function streamGeneration(string $systemPrompt, string $userPrompt, callable $onChunk, string $type = 'document'): void
     {
+        $globalContexts = $this->getGlobalContexts();
+        if (!empty($globalContexts)) {
+            $systemPrompt = "GLOBAL MANDATES:\n{$globalContexts}\n\n---\n\n" . $systemPrompt;
+        }
+
         if ($this->currentProject) {
             $modules = $this->memory->getRelevantContext($this->currentProject, $userPrompt);
             $context = $this->memory->formatContextForPrompt($modules);
@@ -476,6 +478,20 @@ class GeminiGenerationService
             }
         }
         return $text;
+    }
+
+    /**
+     * Get all global project contexts formatted for prompts.
+     */
+    private function getGlobalContexts(): string
+    {
+        $contexts = \App\Models\ProjectContext::where('is_global', true)->get();
+        if ($contexts->isEmpty()) {
+            return "";
+        }
+        
+        return $contexts->map(fn($ctx) => "### Global Mandate: {$ctx->name}\n{$ctx->content}")
+            ->implode("\n\n");
     }
 
     /**
