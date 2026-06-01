@@ -17,6 +17,7 @@ class Persona extends Model
         'cost_multiplier',
         'is_global',
         'is_active',
+        'google_drive_id',
     ];
 
     protected $casts = [
