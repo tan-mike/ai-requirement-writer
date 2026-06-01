@@ -29,6 +29,7 @@ class Project extends Model implements Auditable
         'type',
         'mode',
         'status',
+        'is_curated',
         'repository_url',
         'repository_path',
         'architecture_summary',
@@ -38,7 +39,15 @@ class Project extends Model implements Auditable
     protected $attributes = [
         'mode' => 'template',
         'status' => 'draft',
+        'is_curated' => false,
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_curated' => 'boolean',
+        ];
+    }
 
     public function user(): BelongsTo
     {

@@ -12,20 +12,31 @@ class ProjectController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $projects = Project::where(function($query) use ($user) {
-            $query->where('user_id', $user->id)
-                  ->when($user->current_team_id, function($q) use ($user) {
-                      $q->orWhere('team_id', $user->current_team_id);
-                  });
-        })
-        ->latest()
-        ->get();
+        $projects = Project::query()
+            ->when($user->role !== 'admin', function($query) {
+                $query->where('is_curated', true);
+            })
+            ->when($user->role === 'admin', function($query) use ($user) {
+                $query->where(function($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                      ->when($user->current_team_id, function($sq) use ($user) {
+                          $sq->orWhere('team_id', $user->current_team_id);
+                      })
+                      ->orWhere('is_curated', true);
+                });
+            })
+            ->latest()
+            ->get();
 
         return response()->json(['data' => $projects]);
     }
 
     public function store(StoreProjectRequest $request): JsonResponse
     {
+        if (config('projects.creation_disabled') && $request->user()->role !== 'admin') {
+            return response()->json(['message' => 'Project creation is currently disabled.'], 403);
+        }
+
         $data = $request->validated();
         $contextFile = $request->file('context_file');
         $contextIds = $request->input('context_ids', []);
