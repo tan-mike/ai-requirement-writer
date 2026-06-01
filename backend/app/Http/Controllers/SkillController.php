@@ -11,7 +11,7 @@ class SkillController extends Controller
     public function index(Request $request)
     {
         return response()->json([
-            'data' => $request->user()->personas()->latest()->get()
+            'data' => Persona::visibleTo($request->user()->id)->latest()->get()
         ]);
     }
 
