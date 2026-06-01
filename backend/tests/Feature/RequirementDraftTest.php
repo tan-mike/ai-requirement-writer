@@ -66,7 +66,7 @@ class RequirementDraftTest extends TestCase
             ->postJson("/api/projects/{$project->id}/drafts/{$draft->id}/approve");
 
         $response->assertOk();
-        $this->assertDatabaseHas('requirement_drafts', ['id' => $draft->id, 'status' => 'approved']);
+        $this->assertDatabaseHas('requirement_drafts', ['id' => $draft->id, 'status' => 'committed']);
     }
 
     public function test_user_cannot_access_another_users_drafts(): void
