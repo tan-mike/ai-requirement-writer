@@ -75,30 +75,30 @@ class GeminiGenerationService
     /**
      * Stream BRD generation from intake fields and/or chat history.
      */
-    public function streamBrd(string $systemPrompt, array $intakeFields, array $chatHistory, array $additionalContexts, callable $onChunk): void
+    public function streamBrd(string $systemPrompt, array $intakeFields, array $chatHistory, array $additionalContexts, callable $onChunk, ?\App\Models\RequirementDraft $draft = null): void
     {
         $prompt = $this->buildBrdPrompt($intakeFields, $chatHistory, $additionalContexts);
-        $this->streamGeneration($systemPrompt, $prompt, $onChunk, 'brd');
+        $this->streamGeneration($systemPrompt, $prompt, $onChunk, 'brd', $draft);
     }
 
     /**
      * Stream User Stories generation from an approved BRD.
      */
-    public function streamStories(string $systemPrompt, string $approvedBrd, array $additionalContexts, callable $onChunk): void
+    public function streamStories(string $systemPrompt, string $approvedBrd, array $additionalContexts, callable $onChunk, ?\App\Models\RequirementDraft $draft = null): void
     {
         $prompt = $this->buildStoriesPrompt($approvedBrd, $additionalContexts);
         $fullSystemPrompt = $systemPrompt . "\n\nTASK: Now, focus specifically on generating high-quality User Stories. Use the format 'As a [user], I want [goal] so that [benefit]'. Include detailed acceptance criteria for each story.";
-        $this->streamGeneration($fullSystemPrompt, $prompt, $onChunk, 'stories');
+        $this->streamGeneration($fullSystemPrompt, $prompt, $onChunk, 'stories', $draft);
     }
 
     /**
      * Stream Technical Specification generation from an approved BRD and approved stories.
      */
-    public function streamSpec(string $systemPrompt, string $approvedBrd, string $approvedStories, array $additionalContexts, callable $onChunk): void
+    public function streamSpec(string $systemPrompt, string $approvedBrd, string $approvedStories, array $additionalContexts, callable $onChunk, ?\App\Models\RequirementDraft $draft = null): void
     {
         $prompt = $this->buildSpecPrompt($approvedBrd, $approvedStories, $additionalContexts);
         $fullSystemPrompt = $systemPrompt . "\n\nTASK: Now, focus specifically on generating a Technical Specification. Include: System Architecture, Data Models, API Contracts, and Security Considerations.";
-        $this->streamGeneration($fullSystemPrompt, $prompt, $onChunk, 'spec');
+        $this->streamGeneration($fullSystemPrompt, $prompt, $onChunk, 'spec', $draft);
     }
 
     /**
@@ -173,7 +173,7 @@ class GeminiGenerationService
     /**
      * Stream a synthesis of the original draft and committee critiques.
      */
-    public function streamSynthesis(string $systemPrompt, string $originalDraft, array $critiques, callable $onChunk, string $draftType = 'document'): void
+    public function streamSynthesis(string $systemPrompt, string $originalDraft, array $critiques, callable $onChunk, string $draftType = 'document', ?\App\Models\RequirementDraft $draft = null): void
     {
         $typeLabel = match($draftType) {
             'brd' => 'Business Requirements Document (BRD)',
@@ -198,7 +198,7 @@ class GeminiGenerationService
         TASK: Incorporate all feedback and provide the final, polished {$typeLabel} in markdown.
         FINAL VERSION:";
 
-        $this->streamGeneration($systemPrompt, $prompt, $onChunk, 'synthesis');
+        $this->streamGeneration($systemPrompt, $prompt, $onChunk, 'synthesis', $draft);
     }
 
     /**
@@ -377,9 +377,18 @@ class GeminiGenerationService
      * Run a single streaming generation call, invoking $onChunk for each non-empty text chunk.
      * Includes logic to strip preamble by anchoring to the first markdown heading.
      */
-    private function streamGeneration(string $systemPrompt, string $userPrompt, callable $onChunk, string $type = 'document'): void
+    private function streamGeneration(string $systemPrompt, string $userPrompt, callable $onChunk, string $type = 'document', ?\App\Models\RequirementDraft $draft = null): void
     {
         $hierarchy = [];
+
+        // 0. FEATURE INTENT (Highest Priority - Targeted Refinement)
+        if ($draft && $draft->title) {
+            $intent = "### TARGET FEATURE: {$draft->title}\n";
+            if ($draft->description) {
+                $intent .= "USER INTENT: {$draft->description}";
+            }
+            $hierarchy[] = $intent;
+        }
         
         // 1. Company Context (Universal)
         $companyCtx = $this->getCompanyContext();
@@ -426,6 +435,7 @@ class GeminiGenerationService
                 'type' => $type,
                 'user_id' => $this->currentUser?->id,
                 'project_id' => $this->currentProject?->id,
+                'draft_id' => $draft?->id,
             ]);
 
             $buffer = '';
@@ -479,7 +489,8 @@ class GeminiGenerationService
                 inputTokens: $inputTokens,
                 outputTokens: $outputTokens,
                 totalTokens: $totalTokens,
-                executionTimeMs: $duration
+                executionTimeMs: $duration,
+                metadata: ['draft_id' => $draft?->id]
             );
 
         } catch (\Exception $e) {
@@ -491,7 +502,8 @@ class GeminiGenerationService
                 inputPrompt: $userPrompt,
                 outputText: $fullOutput ?: null,
                 executionTimeMs: $duration,
-                errorMessage: $e->getMessage()
+                errorMessage: $e->getMessage(),
+                metadata: ['draft_id' => $draft?->id]
             );
 
             throw $e;

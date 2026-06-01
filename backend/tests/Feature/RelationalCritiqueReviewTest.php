@@ -96,9 +96,10 @@ class RelationalCritiqueReviewTest extends TestCase
                 'Original content',
                 ['Tech Reviewer' => 'Improve X and Y'],
                 \Closure::class,
-                'brd'
+                'brd',
+                \Mockery::type(\App\Models\RequirementDraft::class)
             )
-            ->andReturnUsing(function ($sp, $content, $critiques, $onChunk) {
+            ->andReturnUsing(function ($sp, $content, $critiques, $onChunk, $type, $draftObj) {
                 $onChunk('Synthesized content');
             });
 

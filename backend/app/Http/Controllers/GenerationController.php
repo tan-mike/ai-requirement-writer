@@ -43,6 +43,8 @@ class GenerationController extends Controller
             'context_ids.*' => ['exists:project_contexts,id'],
             'brd_draft_id' => $type !== 'brd' ? ['required', 'exists:requirement_drafts,id'] : ['nullable'],
             'stories_draft_id' => $type === 'spec' ? ['required', 'exists:requirement_drafts,id'] : ['nullable'],
+            'title' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
         ]);
 
         set_time_limit(0);
@@ -56,12 +58,12 @@ class GenerationController extends Controller
         }
 
         $reviewers = Persona::whereIn('id', $request->reviewer_persona_ids ?? [])->get();
-        
+
         // Merge project's linked contexts with any extra contexts provided in the request
         $projectContexts = $project->projectContexts;
         $requestContexts = ProjectContext::whereIn('id', $request->context_ids ?? [])->get();
         $contexts = $projectContexts->concat($requestContexts)->unique('id');
-        
+
         if ($type === 'stories') {
             $brdDraft = RequirementDraft::findOrFail($request->brd_draft_id);
             if (!in_array($brdDraft->status, ['approved', 'committed'])) {
@@ -80,6 +82,8 @@ class GenerationController extends Controller
         $draft = $project->drafts()->create([
             'type' => $type,
             'version' => $this->nextVersion($project, $type),
+            'title' => $request->title,
+            'description' => $request->description,
             'content' => '',
             'status' => 'drafting',
             'lead_persona_id' => $leadPersona->id,
@@ -90,7 +94,7 @@ class GenerationController extends Controller
         return response()->stream(function () use ($project, $draft, $leadPersona, $reviewers, $contexts, $type, $request) {
             try {
                 $accumulated = '';
-                
+
                 $onChunk = function (string $chunk) use (&$accumulated) {
                     $accumulated .= $chunk;
                     echo 'data: ' . json_encode(['text' => $chunk]) . "\n\n";
@@ -101,14 +105,14 @@ class GenerationController extends Controller
                 if ($type === 'brd') {
                     $intake = $project->intake?->fields ?? [];
                     $chatHistory = $project->chatMessages()->orderBy('order')->get()->toArray();
-                    $this->gemini->streamBrd($leadPersona->system_prompt, $intake, $chatHistory, $contexts->toArray(), $onChunk);
+                    $this->gemini->streamBrd($leadPersona->system_prompt, $intake, $chatHistory, $contexts->toArray(), $onChunk, $draft);
                 } elseif ($type === 'stories') {
                     $brd = RequirementDraft::findOrFail($request->brd_draft_id)->content;
-                    $this->gemini->streamStories($leadPersona->system_prompt, $brd, $contexts->toArray(), $onChunk);
+                    $this->gemini->streamStories($leadPersona->system_prompt, $brd, $contexts->toArray(), $onChunk, $draft);
                 } elseif ($type === 'spec') {
                     $brd = RequirementDraft::findOrFail($request->brd_draft_id)->content;
                     $stories = RequirementDraft::findOrFail($request->stories_draft_id)->content;
-                    $this->gemini->streamSpec($leadPersona->system_prompt, $brd, $stories, $contexts->toArray(), $onChunk);
+                    $this->gemini->streamSpec($leadPersona->system_prompt, $brd, $stories, $contexts->toArray(), $onChunk, $draft);
                 }
 
                 $draft->update(['content' => $accumulated]);
@@ -181,7 +185,8 @@ class GenerationController extends Controller
                         if (ob_get_level() > 0) ob_flush();
                         flush();
                     },
-                    $draft->type
+                    $draft->type,
+                    $draft
                 );
 
                 $draft->update([
