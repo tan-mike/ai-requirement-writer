@@ -2,13 +2,9 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api'
-import { ProjectCard } from '@/components/ProjectCard'
+import { ProjectCard, Project } from '@/components/ProjectCard'
 import ProjectContextManager from '@/components/ProjectContextManager'
 import GuidedTour from '@/components/GuidedTour'
-
-interface Project {
-  id: number; name: string; type: string; status: string; mode: string; created_at: string
-}
 
 export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -20,6 +16,9 @@ export default function DashboardPage() {
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
+
+  const curatedProjects = projects.filter(p => p.is_curated)
+  const myProjects = projects.filter(p => !p.is_curated)
 
   return (
     <div>
@@ -52,9 +51,23 @@ export default function DashboardPage() {
         </div>
       )}
       
-      <div className="grid gap-6 md:grid-cols-2 mb-12">
-        {projects.map(p => <ProjectCard key={p.id} project={p} />)}
-      </div>
+      {!loading && curatedProjects.length > 0 && (
+        <div className="mb-12">
+          <h2 className="text-lg font-bold text-foreground mb-4">Curated Templates</h2>
+          <div className="grid gap-6 md:grid-cols-2">
+            {curatedProjects.map(p => <ProjectCard key={p.id} project={p} />)}
+          </div>
+        </div>
+      )}
+
+      {!loading && myProjects.length > 0 && (
+        <div className="mb-12">
+          <h2 className="text-lg font-bold text-foreground mb-4">My Projects</h2>
+          <div className="grid gap-6 md:grid-cols-2">
+            {myProjects.map(p => <ProjectCard key={p.id} project={p} />)}
+          </div>
+        </div>
+      )}
 
       <div id="tour-contexts-section">
         <ProjectContextManager />
