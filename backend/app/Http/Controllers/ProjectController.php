@@ -72,7 +72,7 @@ class ProjectController extends Controller
         $isOwner = $project->user_id === $user->id;
         $isTeamMember = $project->team_id && $project->team_id === $user->current_team_id;
 
-        if (!$isOwner && !$isTeamMember) {
+        if (!$isOwner && !$isTeamMember && !$project->is_curated) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -95,6 +95,13 @@ class ProjectController extends Controller
         if ($project->user_id !== $request->user()->id) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
+
+        $project->update(['status' => Project::STATUS_COMPLETE]);
+
+        return response()->json(['data' => $project]);
+    }
+}
+}
 
         $project->update(['status' => Project::STATUS_COMPLETE]);
 

@@ -80,8 +80,9 @@ class GenerationController extends Controller
         }
 
         $draft = $project->drafts()->create([
+            'user_id' => $request->user()->id,
             'type' => $type,
-            'version' => $this->nextVersion($project, $type),
+            'version' => $this->nextVersion($project, $type, $request->user()->id),
             'title' => $request->title,
             'description' => $request->description,
             'content' => '',
@@ -217,8 +218,8 @@ class GenerationController extends Controller
         ]);
     }
 
-    private function nextVersion(Project $project, string $type): int
+    private function nextVersion(Project $project, string $type, int $userId): int
     {
-        return ($project->drafts()->where('type', $type)->max('version') ?? 0) + 1;
+        return ($project->drafts()->where('type', $type)->where('user_id', $userId)->max('version') ?? 0) + 1;
     }
 }
