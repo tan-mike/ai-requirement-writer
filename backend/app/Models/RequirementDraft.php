@@ -15,6 +15,7 @@ class RequirementDraft extends Model
 
     protected $fillable = [
         'project_id',
+        'user_id',
         'type',
         'version',
         'title',
@@ -38,6 +39,11 @@ class RequirementDraft extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     public function leadPersona(): BelongsTo
