@@ -70,3 +70,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects/{project}/messages', [\App\Http\Controllers\ChatController::class, 'index']);
     Route::post('/projects/{project}/chat', [\App\Http\Controllers\ChatController::class, 'chat']);
 });
+
+Route::middleware(['auth:sanctum', 'can:admin-access'])->prefix('admin')->group(function () {
+    Route::get('/projects', [\App\Http\Controllers\Admin\ProjectCurationController::class, 'index']);
+    Route::patch('/projects/{project}/curate', [\App\Http\Controllers\Admin\ProjectCurationController::class, 'update']);
+    Route::post('/projects', [\App\Http\Controllers\Admin\ProjectCurationController::class, 'store']);
+    Route::get('/settings', [\App\Http\Controllers\Admin\SettingController::class, 'index']);
+    Route::patch('/settings', [\App\Http\Controllers\Admin\SettingController::class, 'update']);
+});
