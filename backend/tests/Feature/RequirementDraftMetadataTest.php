@@ -20,7 +20,7 @@ class RequirementDraftMetadataTest extends TestCase
     {
         $draft = \App\Models\RequirementDraft::create([
             'project_id' => \App\Models\Project::factory()->create()->id,
-            'type' => 'business_requirements',
+            'type' => 'brd',
             'title' => 'Feature X',
             'description' => 'Requirement for Feature X',
             'content' => 'Content here',

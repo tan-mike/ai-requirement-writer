@@ -20,7 +20,7 @@ class PersonaFactory extends Factory
         return [
             'slug' => $this->faker->unique()->slug(),
             'name' => $this->faker->name(),
-            'role' => $this->faker->jobTitle(),
+            'role' => $this->faker->randomElement(['lead', 'reviewer']),
             'system_prompt' => $this->faker->paragraph(),
             'cost_multiplier' => 1.0,
             'is_global' => true,

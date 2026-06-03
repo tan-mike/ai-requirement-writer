@@ -60,6 +60,10 @@ class GoogleDriveSyncServiceTest extends TestCase
                 && str_contains($args['q'], "mimeType = 'text/markdown'");
         }))->andReturn($mockFileList);
 
+        $mockClient = Mockery::mock(Client::class);
+        $mockClient->shouldReceive('getScopes')->andReturn(['https://www.googleapis.com/auth/drive.readonly']);
+        $mockDrive->shouldReceive('getClient')->andReturn($mockClient);
+        
         $mockDrive->files = $mockFilesResource;
 
         // We need a way to inject the mock drive into the service
@@ -85,6 +89,10 @@ class GoogleDriveSyncServiceTest extends TestCase
         $mockFilesResource->shouldReceive('get')->with('file-123', ['alt' => 'media'])
             ->andReturn($mockResponse);
 
+        $mockClient = Mockery::mock(Client::class);
+        $mockClient->shouldReceive('getScopes')->andReturn(['https://www.googleapis.com/auth/drive.readonly']);
+        $mockDrive->shouldReceive('getClient')->andReturn($mockClient);
+        
         $mockDrive->files = $mockFilesResource;
 
         $service = new GoogleDriveSyncService($mockDrive);
