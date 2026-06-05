@@ -45,8 +45,6 @@ class User extends Authenticatable
         'role' => 'member',
     ];
 
-    protected $fillable = ['name', 'email', 'password', 'role', 'free_tier', 'gemini_api_key', 'tour_flags', 'current_team_id'];
-
     /**
      * Get the attributes that should be cast.
      *
