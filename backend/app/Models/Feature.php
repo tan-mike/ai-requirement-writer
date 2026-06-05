@@ -15,6 +15,7 @@ class Feature extends Model
     const STATUS_INTAKE = 'intake';
     const STATUS_GENERATING_BRD = 'generating_brd';
     const STATUS_READY = 'ready';
+    const STATUS_COMPLETED = 'completed';
 
     protected $fillable = [
         'project_id',

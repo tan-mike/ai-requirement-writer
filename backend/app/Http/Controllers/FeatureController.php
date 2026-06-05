@@ -52,4 +52,23 @@ class FeatureController extends Controller
         $feature->delete();
         return response()->json(null, 204);
     }
+
+    public function complete(Feature $feature): JsonResponse
+    {
+        $feature->update(['status' => Feature::STATUS_COMPLETED]);
+        return response()->json(['data' => $feature]);
+    }
+
+    public function resetDiscovery(Feature $feature): JsonResponse
+    {
+        if ($feature->mode === 'conversational') {
+            $feature->chatMessages()->delete();
+        } else {
+            $feature->intake()->delete();
+        }
+
+        $feature->update(['status' => Feature::STATUS_INTAKE]);
+
+        return response()->json(['data' => $feature]);
+    }
 }

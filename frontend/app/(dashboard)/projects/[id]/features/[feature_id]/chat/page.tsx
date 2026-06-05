@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api'
+import { useNotifications } from '@/lib/notifications'
 
 interface Message {
   id: number
@@ -14,7 +15,8 @@ interface Message {
 export default function ChatPage({ params }: { params: Promise<{ id: string, feature_id: string }> }) {
   const { id: projectId, feature_id: featureId } = use(params)
   const router = useRouter()
-  const [feature, setFeature] = useState<{ status: string, name: string } | null>(null)
+  const { showAlert, showConfirm } = useNotifications()
+  const [feature, setFeature] = useState<{ status: string, name: string, mode: string } | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
@@ -31,28 +33,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string, fea
   }, [messages, streamingContent])
 
   useEffect(() => {
-    let interval: NodeJS.Timeout
-
     const fetchData = () => {
       Promise.all([
-        apiClient.get<{ data: { status: string, name: string } }>(`/features/${featureId}`),
+        apiClient.get<{ data: { status: string, name: string, mode: string } }>(`/features/${featureId}`),
         apiClient.get<{ data: Message[] }>(`/features/${featureId}/messages`)
       ]).then(([featRes, msgRes]) => {
         setFeature(featRes.data)
         setMessages(msgRes.data)
-        
-        // Features are ready once created, unlike legacy projects with repo ingestion
         setLoading(false)
-        if (msgRes.data.length === 0) {
+        
+        if (msgRes.data.length === 0 && featRes.data.status !== 'completed') {
           triggerInitialMessage()
-        } else {
-          // Check if we need to resume (last message is from user)
-          const last = msgRes.data[msgRes.data.length - 1]
-          if (last.role === 'user' && !readyForBrd) {
-            // We could auto-resume here, but let's just make sure 
-            // handleSendInternal can handle an empty message if we want to 'retry'
-            // or just allow user to type something else.
-          }
         }
       })
       .catch(err => {
@@ -62,8 +53,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string, fea
     }
 
     fetchData()
-
-    return () => clearInterval(interval)
   }, [featureId])
 
   const [started, setStarted] = useState(false)
@@ -82,20 +71,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string, fea
   }
 
   async function handleRestart() {
-    if (!confirm('Are you sure you want to restart? This will clear the entire conversation history.')) return
-    setLoading(true)
-    try {
-      await apiClient.delete(`/features/${featureId}/messages`)
-      setMessages([])
-      setReadyForBrd(false)
-      setStarted(false)
-      triggerInitialMessage()
-    } catch (err) {
-      console.error(err)
-      alert('Failed to restart interview')
-    } finally {
-      setLoading(false)
-    }
+    showConfirm(
+      'Restart Interview',
+      'Are you sure you want to restart? This will clear the entire conversation history.',
+      async () => {
+        setLoading(true)
+        try {
+          await apiClient.delete(`/features/${featureId}/messages`)
+          setMessages([])
+          setReadyForBrd(false)
+          setStarted(false)
+          triggerInitialMessage()
+        } catch (err) {
+          console.error(err)
+          showAlert('Restart Error', 'Failed to restart interview')
+        } finally {
+          setLoading(false)
+        }
+      }
+    )
   }
 
   async function handleSend(e: React.FormEvent) {
@@ -190,6 +184,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string, fea
     </div>
   )
 
+  const isCompleted = feature?.status === 'completed'
+
   return (
     <div className="flex flex-col h-[calc(100vh-180px)] max-w-4xl mx-auto">
       <Link href={`/projects/${projectId}/features/${featureId}`} className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition-colors mb-6 group w-fit">
@@ -200,10 +196,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string, fea
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Discovery Interview: {feature?.name}</h1>
-          <p className="text-sm text-muted-foreground mt-1">Answer the AI's questions to build your requirements.</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isCompleted ? 'This interview is complete and finalized.' : "Answer the AI's questions to build your requirements."}
+          </p>
         </div>
         <div className="flex items-center gap-3">
-            {messages.length > 0 && !readyForBrd && (
+            {messages.length > 0 && !readyForBrd && !isCompleted && (
                 <button 
                     onClick={handleRestart}
                     className="text-xs font-bold text-muted-foreground hover:text-red-500 transition-colors flex items-center gap-1"
@@ -213,7 +211,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string, fea
                 </button>
             )}
             <div className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full uppercase tracking-widest border border-primary/20">
-                AI Assistant Active
+                {isCompleted ? 'Finalized' : 'AI Assistant Active'}
             </div>
         </div>
       </div>
@@ -243,7 +241,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string, fea
           </div>
         )}
 
-        {(!sending && !readyForBrd && (hasError || (messages.length > 0 && messages[messages.length - 1].role === 'user'))) && (
+        {(!sending && !readyForBrd && !isCompleted && (hasError || (messages.length > 0 && messages[messages.length - 1].role === 'user'))) && (
             <div className="flex justify-center py-4 animate-in slide-in-from-bottom-2">
                 <button 
                     onClick={handleRetry}
@@ -255,7 +253,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string, fea
             </div>
         )}
         
-        {readyForBrd && (
+        {readyForBrd && !isCompleted && (
           <div className="flex flex-col items-center gap-4 py-8 animate-in zoom-in duration-500">
             <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-6 text-center max-w-md shadow-lg shadow-emerald-500/5">
                 <div className="w-12 h-12 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-md shadow-emerald-500/20">
@@ -283,19 +281,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string, fea
         <div ref={scrollRef} className="h-4" />
       </div>
 
-      <div className={`card p-2 bg-surface/50 backdrop-blur-sm border-border shadow-lg transition-opacity duration-300 ${readyForBrd ? 'opacity-30 pointer-events-none grayscale' : ''}`}>
+      <div className={`card p-2 bg-surface/50 backdrop-blur-sm border-border shadow-lg transition-opacity duration-300 ${ (readyForBrd || isCompleted) ? 'opacity-30 pointer-events-none grayscale' : ''}`}>
         <form onSubmit={handleSend} className="flex gap-2">
           <input
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
-            placeholder={readyForBrd ? "Interview complete" : "Type your message..."}
+            placeholder={isCompleted ? "Interview finalized" : readyForBrd ? "Interview complete" : "Type your message..."}
             className="flex-1 bg-transparent border-none px-4 py-3 text-sm focus:outline-none focus:ring-0 placeholder:text-muted-foreground"
-            disabled={sending || readyForBrd}
+            disabled={sending || readyForBrd || isCompleted}
           />
           <button
             type="submit"
-            disabled={sending || !input.trim()}
+            disabled={sending || !input.trim() || readyForBrd || isCompleted}
             className="bg-primary text-white p-3 rounded-xl disabled:opacity-50 transition-all hover:scale-105 active:scale-95 shadow-md shadow-primary/20"
             aria-label="Send message"
           >

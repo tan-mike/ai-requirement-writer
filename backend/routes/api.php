@@ -27,6 +27,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/features/{feature}', [FeatureController::class, 'show']);
     Route::patch('/features/{feature}', [FeatureController::class, 'update']);
     Route::delete('/features/{feature}', [FeatureController::class, 'destroy']);
+    Route::post('/features/{feature}/complete', [FeatureController::class, 'complete']);
+    Route::post('/features/{feature}/reset-discovery', [FeatureController::class, 'resetDiscovery']);
 
     // Intake
     Route::post('/features/{feature}/intake', [FeatureIntakeController::class, 'store']);

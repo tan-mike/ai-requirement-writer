@@ -1,8 +1,10 @@
 'use client'
 import { useState, useEffect } from 'react'
 import api from '@/lib/api'
+import { useNotifications } from '@/lib/notifications'
 
 export default function AdminSettingsPage() {
+  const { showAlert } = useNotifications()
   const [settings, setSettings] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -26,10 +28,10 @@ export default function AdminSettingsPage() {
     setSaving(true)
     try {
       await api.patch('/admin/settings', { settings })
-      alert('Settings saved successfully.')
+      showAlert('Success', 'Settings saved successfully.')
     } catch (e) {
       console.error(e)
-      alert('Failed to save settings.')
+      showAlert('Error', 'Failed to save settings.')
     } finally {
       setSaving(false)
     }

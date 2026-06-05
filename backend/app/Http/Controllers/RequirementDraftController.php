@@ -68,6 +68,10 @@ class RequirementDraftController extends Controller
     {
         $this->checkAccess($request, $feature, $draft);
 
+        if ($feature->status === Feature::STATUS_COMPLETED) {
+            return response()->json(['message' => 'Cannot approve drafts for a finalized feature.'], 422);
+        }
+
         // Simple approve for now, we'll need to update GraphOrchestratorService later if needed
         $draft->approve();
         return response()->json(['data' => $draft->fresh()]);

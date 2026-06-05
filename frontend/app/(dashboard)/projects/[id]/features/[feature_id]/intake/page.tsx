@@ -16,6 +16,7 @@ interface TemplateField {
 interface Feature {
   id: number
   name: string
+  status: string
   template: {
     fields: TemplateField[]
   }
@@ -50,6 +51,8 @@ export default function IntakePage({ params }: { params: Promise<{ id: string, f
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (feature?.status === 'completed') return
+
     const fields = feature?.template?.fields ?? []
     const missing = fields.filter(f => f.required && !formValues[f.key]?.trim())
     if (missing.length > 0) {
@@ -81,6 +84,7 @@ export default function IntakePage({ params }: { params: Promise<{ id: string, f
     </div>
   )
 
+  const isCompleted = feature.status === 'completed'
   const fields = feature.template?.fields ?? []
 
   return (
@@ -92,17 +96,27 @@ export default function IntakePage({ params }: { params: Promise<{ id: string, f
 
       <div className="card p-10">
         <div className="mb-10 text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">{feature.name}</h1>
-          <p className="text-muted-foreground mt-2">Fill in the feature details to provide context for the AI agents.</p>
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">{feature.name}</h1>
+            {isCompleted && (
+                <span className="bg-emerald-500 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm shadow-emerald-500/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Finalized
+                </span>
+            )}
+          </div>
+          <p className="text-muted-foreground mt-2">
+            {isCompleted ? 'This requirement set is finalized and read-only.' : 'Fill in the feature details to provide context for the AI agents.'}
+          </p>
         </div>
 
         {error && (
-          <div role="alert" aria-live="polite" className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-8">
+          <div role="alert" aria-live="polite" className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-8">
             <p className="text-red-700 dark:text-red-400 text-sm font-semibold">{error}</p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={handleSubmit} className={`space-y-8 ${isCompleted ? 'opacity-60 pointer-events-none' : ''}`}>
           {fields.map(field => (
             <div key={field.key} className="space-y-1.5">
               <div className="flex items-center gap-2 mb-1.5">
@@ -119,6 +133,7 @@ export default function IntakePage({ params }: { params: Promise<{ id: string, f
                   rows={5}
                   className="w-full bg-surface border-2 border-border rounded-xl px-4 py-3 text-sm focus:border-primary transition-all outline-none resize-y leading-relaxed"
                   placeholder={`Enter ${field.label.toLowerCase()}...`}
+                  disabled={isCompleted}
                 />
               ) : (
                 <input
@@ -127,25 +142,28 @@ export default function IntakePage({ params }: { params: Promise<{ id: string, f
                   onChange={e => handleChange(field.key, e.target.value)}
                   className="input text-base"
                   placeholder={`Enter ${field.label.toLowerCase()}...`}
+                  disabled={isCompleted}
                 />
               )}
             </div>
           ))}
 
-          <div className="pt-4">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="btn-primary w-full py-4 text-base shadow-lg shadow-primary/20"
-            >
-              {submitting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Saving & Generating...
-                </span>
-              ) : 'Save & Generate Requirements'}
-            </button>
-          </div>
+          {!isCompleted && (
+            <div className="pt-4">
+                <button
+                type="submit"
+                disabled={submitting}
+                className="btn-primary w-full py-4 text-base shadow-lg shadow-primary/20"
+                >
+                {submitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving & Generating...
+                    </span>
+                ) : 'Save & Generate Requirements'}
+                </button>
+            </div>
+          )}
         </form>
       </div>
     </div>

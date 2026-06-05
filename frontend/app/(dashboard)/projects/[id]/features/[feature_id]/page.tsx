@@ -1,7 +1,9 @@
 'use client'
 import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { apiClient } from '@/lib/api'
+import { useNotifications } from '@/lib/notifications'
 import StreamingOutput from '@/components/StreamingOutput'
 import DraftEditor from '@/components/DraftEditor'
 import GenerationStrategy, { GenerationConfig } from '@/components/GenerationStrategy'
@@ -39,6 +41,7 @@ interface FeatureResponse {
     project_id: number
     name: string
     status: string
+    mode: string
     lead_persona_id: number
     lead_persona?: { id: number; name: string }
   }
@@ -54,6 +57,8 @@ const STEPS: { key: Step; label: string; title: string }[] = [
 
 export default function FeatureViewPage({ params }: { params: Promise<{ id: string, feature_id: string }> }) {
   const { id: projectId, feature_id: featureId } = use(params)
+  const router = useRouter()
+  const { showAlert, showConfirm } = useNotifications()
   const [feature, setFeature] = useState<FeatureResponse['data'] | null>(null)
   const [drafts, setDrafts] = useState<Record<Step, Draft[]>>({ brd: [], stories: [], spec: [] })
   const [generating, setGenerating] = useState<Step | null>(null)
@@ -119,17 +124,85 @@ export default function FeatureViewPage({ params }: { params: Promise<{ id: stri
     return baseBody
   }
 
+  const handleComplete = async () => {
+    showConfirm(
+      'Finalize Feature',
+      'Are you sure? Marking this feature as complete will lock all requirements from further changes.',
+      async () => {
+        try {
+          await apiClient.post(`/features/${featureId}/complete`, {})
+          loadData()
+        } catch {
+          showAlert('Error', 'Failed to complete feature')
+        }
+      }
+    )
+  }
+
+  const handleResetDiscovery = async () => {
+    showConfirm(
+      'Restart Discovery',
+      'This will clear your current intake/chat data but preserve generated drafts. Continue?',
+      async () => {
+        try {
+          await apiClient.post(`/features/${featureId}/reset-discovery`, {})
+          if (feature?.mode === 'conversational') {
+            router.push(`/projects/${projectId}/features/${featureId}/chat`)
+          } else {
+            router.push(`/projects/${projectId}/features/${featureId}/intake`)
+          }
+        } catch {
+          showAlert('Error', 'Failed to reset discovery')
+        }
+      }
+    )
+  }
+
+  const isCompleted = feature?.status === 'completed'
+
   return (
     <div className="max-w-4xl space-y-12 pb-20">
-      <Link href={`/projects/${projectId}`} className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition-colors mb-2 group w-fit">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 transition-transform group-hover:-translate-x-1"><path d="m15 18-6-6 6-6"/></svg>
-        Back to Project
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link href={`/projects/${projectId}`} className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition-colors mb-2 group w-fit">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 transition-transform group-hover:-translate-x-1"><path d="m15 18-6-6 6-6"/></svg>
+            Back to Project
+        </Link>
+
+        <div className="flex items-center gap-3">
+            {!isCompleted && (
+                <button 
+                    onClick={handleResetDiscovery}
+                    className="text-xs font-bold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    Restart Discovery
+                </button>
+            )}
+            {!isCompleted && isApproved('brd') && (
+                <button 
+                    onClick={handleComplete}
+                    className="bg-emerald-50 text-emerald-600 border border-emerald-200 px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-all shadow-sm"
+                >
+                    Finalize Feature
+                </button>
+            )}
+        </div>
+      </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">{feature?.name}</h1>
-          <p className="text-muted-foreground mt-2 text-lg">Build high-quality documentation with AI experts.</p>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">{feature?.name}</h1>
+            {isCompleted && (
+                <span className="bg-emerald-500 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm shadow-emerald-500/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Completed
+                </span>
+            )}
+          </div>
+          <p className="text-muted-foreground text-lg">
+            {isCompleted ? 'This feature is finalized. Requirements are now read-only.' : 'Build high-quality documentation with AI experts.'}
+          </p>
         </div>
       </div>
 
@@ -160,7 +233,7 @@ export default function FeatureViewPage({ params }: { params: Promise<{ id: stri
                 )}
               </div>
 
-              {!isGenerating && !isSynthesizing && (!draft || draft.status === 'failed') && (
+              {!isGenerating && !isSynthesizing && (!draft || draft.status === 'failed') && !isCompleted && (
                 <div id="tour-generation-strategy">
                   <div className="flex gap-4">
                       <GenerationStrategy 
@@ -231,7 +304,7 @@ export default function FeatureViewPage({ params }: { params: Promise<{ id: stri
                     </div>
                   )}
 
-                  {draft.status === 'refining' && (draft.critiques ?? []).length > 0 && (
+                  {draft.status === 'refining' && (draft.critiques ?? []).length > 0 && !isCompleted && (
                     <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-lg flex items-center justify-between">
                       <div className="flex items-center gap-3 text-indigo-800">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/></svg>
@@ -258,11 +331,12 @@ export default function FeatureViewPage({ params }: { params: Promise<{ id: stri
                         featureId={featureId}
                         draft={draft}
                         onApproved={loadData}
+                        readOnly={isCompleted}
                       />
                     </div>
                   </div>
 
-                  {draft.status === 'approved' && (
+                  {draft.status === 'approved' && !isCompleted && (
                     <button
                       onClick={() => setGenerating(step.key)}
                       className="text-xs text-muted-foreground hover:text-primary underline transition-colors"

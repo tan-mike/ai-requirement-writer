@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { apiClient } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { useNotifications } from '@/lib/notifications'
 
 interface ProjectContext {
   id: number
@@ -29,6 +30,7 @@ interface Team {
 
 export default function ProjectContextManager() {
   const { user } = useAuth()
+  const { showConfirm } = useNotifications()
   const [contexts, setContexts] = useState<ProjectContext[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(false)
@@ -81,9 +83,14 @@ export default function ProjectContextManager() {
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this context?')) return
-    await apiClient.delete(`/contexts/${id}`)
-    await loadContexts()
+    showConfirm(
+      'Delete Context',
+      'Are you sure you want to delete this context?',
+      async () => {
+        await apiClient.delete(`/contexts/${id}`)
+        await loadContexts()
+      }
+    )
   }
 
   const startEditing = (ctx: ProjectContext) => {

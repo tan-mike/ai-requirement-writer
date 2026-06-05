@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '@/lib/api'
 import GuidedTour from '@/components/GuidedTour'
+import { useNotifications } from '@/lib/notifications'
 
 interface CustomSkill {
   id: number
@@ -12,6 +13,7 @@ interface CustomSkill {
 }
 
 export default function SettingsPage() {
+  const { showAlert, showConfirm } = useNotifications()
   const [freeTier, setFreeTier] = useState(false)
   const [geminiApiKey, setGeminiApiKey] = useState('')
   const [loading, setLoading] = useState(true)
@@ -50,22 +52,32 @@ export default function SettingsPage() {
   }
 
   async function handleDeleteSkill(id: number) {
-    if (!confirm('Are you sure you want to delete this custom skill?')) return
-    await apiClient.delete(`/user/skills/${id}`)
-    setPersonas(skills.filter(s => s.id !== id))
+    showConfirm(
+      'Delete Skill',
+      'Are you sure you want to delete this custom skill?',
+      async () => {
+        await apiClient.delete(`/user/skills/${id}`)
+        setPersonas(skills.filter(s => s.id !== id))
+      }
+    )
   }
 
   async function handleResetTours() {
-    if (!confirm('This will show all onboarding guides again. Continue?')) return
-    setSaving(true)
-    try {
-      await apiClient.patch('/user/settings', { tour_flags: {} })
-      alert('Onboarding tours have been reset!')
-    } catch {
-      alert('Failed to reset tours.')
-    } finally {
-      setSaving(false)
-    }
+    showConfirm(
+      'Reset Onboarding',
+      'This will show all onboarding guides again. Continue?',
+      async () => {
+        setSaving(true)
+        try {
+          await apiClient.patch('/user/settings', { tour_flags: {} })
+          showAlert('Success', 'Onboarding tours have been reset!')
+        } catch {
+          showAlert('Error', 'Failed to reset tours.')
+        } finally {
+          setSaving(false)
+        }
+      }
+    )
   }
 
   if (loading) return <div className="animate-pulse">Loading settings...</div>

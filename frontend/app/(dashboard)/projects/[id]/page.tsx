@@ -2,6 +2,7 @@
 import { use, useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api'
+import { useNotifications } from '@/lib/notifications'
 
 interface Project {
   id: number
@@ -27,6 +28,7 @@ interface ProjectContext {
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const { showAlert } = useNotifications()
   const [project, setProject] = useState<Project | null>(null)
   const [features, setFeatures] = useState<Feature[]>([])
   const [loading, setLoading] = useState(true)
@@ -84,7 +86,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       await loadData()
     } catch (err) {
       console.error(err)
-      alert('Failed to update project contexts')
+      showAlert('Update Error', 'Failed to update project contexts')
     } finally {
       setSavingContexts(false)
     }
