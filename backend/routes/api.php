@@ -1,9 +1,10 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\FeatureController;
+use App\Http\Controllers\FeatureIntakeController;
 use App\Http\Controllers\GenerationController;
 use App\Http\Controllers\ProjectController;
-use App\Http\Controllers\ProjectIntakeController;
 use App\Http\Controllers\RequirementDraftController;
 use App\Http\Controllers\TemplateController;
 use Illuminate\Support\Facades\Route;
@@ -16,17 +17,27 @@ Route::prefix('auth')->group(function () {
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/templates', [TemplateController::class, 'index']);
-    Route::apiResource('projects', ProjectController::class)->except(['update']);
+    
+    // Projects
+    Route::apiResource('projects', ProjectController::class);
+
+    // Features
+    Route::get('/projects/{project}/features', [FeatureController::class, 'index']);
+    Route::post('/projects/{project}/features', [FeatureController::class, 'store']);
+    Route::get('/features/{feature}', [FeatureController::class, 'show']);
+    Route::patch('/features/{feature}', [FeatureController::class, 'update']);
+    Route::delete('/features/{feature}', [FeatureController::class, 'destroy']);
+    Route::post('/features/{feature}/complete', [FeatureController::class, 'complete']);
+    Route::post('/features/{feature}/reset-discovery', [FeatureController::class, 'resetDiscovery']);
 
     // Intake
-    Route::post('/projects/{project}/intake', [ProjectIntakeController::class, 'store']);
-    Route::post('/projects/{project}/complete', [ProjectController::class, 'complete']);
+    Route::post('/features/{feature}/intake', [FeatureIntakeController::class, 'store']);
 
-    // Generation (SSE streaming)
-    Route::post('/projects/{project}/generate/brd', [GenerationController::class, 'brd']);
-    Route::post('/projects/{project}/generate/stories', [GenerationController::class, 'stories']);
-    Route::post('/projects/{project}/generate/spec', [GenerationController::class, 'spec']);
-    Route::post('/projects/{project}/drafts/{draft}/synthesize', [GenerationController::class, 'synthesize']);
+    // Generation (SSE streaming) - scoped to Feature
+    Route::post('/features/{feature}/generate/brd', [GenerationController::class, 'brd']);
+    Route::post('/features/{feature}/generate/stories', [GenerationController::class, 'stories']);
+    Route::post('/features/{feature}/generate/spec', [GenerationController::class, 'spec']);
+    Route::post('/features/{feature}/drafts/{draft}/synthesize', [GenerationController::class, 'synthesize']);
 
     // Contexts
     Route::get('/contexts', [\App\Http\Controllers\ProjectContextController::class, 'index']);
@@ -60,13 +71,22 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user/settings', [\App\Http\Controllers\UserSettingsController::class, 'show']);
     Route::patch('/user/settings', [\App\Http\Controllers\UserSettingsController::class, 'update']);
 
-    // Drafts
-    Route::get('/projects/{project}/drafts', [RequirementDraftController::class, 'index']);
-    Route::get('/projects/{project}/drafts/{draft}', [RequirementDraftController::class, 'show']);
-    Route::patch('/projects/{project}/drafts/{draft}', [RequirementDraftController::class, 'update']);
-    Route::post('/projects/{project}/drafts/{draft}/approve', [RequirementDraftController::class, 'approve']);
+    // Drafts - scoped to Feature
+    Route::get('/features/{feature}/drafts', [RequirementDraftController::class, 'index']);
+    Route::get('/features/{feature}/drafts/{draft}', [RequirementDraftController::class, 'show']);
+    Route::patch('/features/{feature}/drafts/{draft}', [RequirementDraftController::class, 'update']);
+    Route::post('/features/{feature}/drafts/{draft}/approve', [RequirementDraftController::class, 'approve']);
 
-    // Chat
-    Route::get('/projects/{project}/messages', [\App\Http\Controllers\ChatController::class, 'index']);
-    Route::post('/projects/{project}/chat', [\App\Http\Controllers\ChatController::class, 'chat']);
+    // Chat - scoped to Feature
+    Route::get('/features/{feature}/messages', [\App\Http\Controllers\ChatController::class, 'index']);
+    Route::delete('/features/{feature}/messages', [\App\Http\Controllers\ChatController::class, 'clear']);
+    Route::post('/features/{feature}/chat', [\App\Http\Controllers\ChatController::class, 'chat']);
+});
+
+Route::middleware(['auth:sanctum', 'can:admin-access'])->prefix('admin')->group(function () {
+    Route::get('/projects', [\App\Http\Controllers\Admin\ProjectCurationController::class, 'index']);
+    Route::patch('/projects/{project}/curate', [\App\Http\Controllers\Admin\ProjectCurationController::class, 'update']);
+    Route::post('/projects', [\App\Http\Controllers\Admin\ProjectCurationController::class, 'store']);
+    Route::get('/settings', [\App\Http\Controllers\Admin\SettingController::class, 'index']);
+    Route::patch('/settings', [\App\Http\Controllers\Admin\SettingController::class, 'update']);
 });

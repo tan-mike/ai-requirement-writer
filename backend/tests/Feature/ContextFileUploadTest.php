@@ -38,6 +38,7 @@ class ContextFileUploadTest extends TestCase
     {
         Storage::fake('local');
         Queue::fake();
+        config(['projects.creation_disabled' => false]);
         $user = User::factory()->create();
         $persona = \App\Models\Persona::create(['slug' => 'test', 'name' => 'Test', 'role' => 'lead', 'system_prompt' => '...']);
         

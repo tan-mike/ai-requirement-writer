@@ -25,7 +25,8 @@ class ProcessCritiqueJob implements ShouldQueue
     {
         set_time_limit(0); // Prevent premature killing
 
-        $gemini->forUser($this->draft->project->user, $this->draft->project);
+        $feature = $this->draft->feature;
+        $gemini->forUser($this->draft->user, $feature->project)->forFeature($feature);
 
         $critiqueContent = $gemini->generateCritique(
             $this->reviewer->system_prompt,
@@ -47,7 +48,10 @@ class ProcessCritiqueJob implements ShouldQueue
         $completedCount = $this->draft->critiques()->where('status', 'completed')->count();
 
         if ($completedCount === $totalExpected) {
-            $this->draft->update(['status' => 'refining']);
+            app(\App\Services\GraphOrchestratorService::class)->transition($feature, 'refining', [
+                'last_review_completed_at' => now()->toDateTimeString(),
+                'active_draft_id' => $this->draft->id
+            ]);
         }
     }
 

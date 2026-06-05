@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RequirementDraft extends Model
@@ -14,9 +13,12 @@ class RequirementDraft extends Model
     use HasFactory;
 
     protected $fillable = [
-        'project_id',
+        'feature_id',
+        'user_id',
         'type',
         'version',
+        'title',
+        'description',
         'content',
         'status',
         'lead_persona_id',
@@ -33,9 +35,14 @@ class RequirementDraft extends Model
         'version' => 1,
     ];
 
-    public function project(): BelongsTo
+    public function feature(): BelongsTo
     {
-        return $this->belongsTo(Project::class);
+        return $this->belongsTo(Feature::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     public function leadPersona(): BelongsTo
@@ -50,7 +57,7 @@ class RequirementDraft extends Model
 
     public function scopeApproved(Builder $query): Builder
     {
-        return $query->where('status', 'approved');
+        return $query->whereIn('status', ['approved', 'committed']);
     }
 
     public function approve(): void

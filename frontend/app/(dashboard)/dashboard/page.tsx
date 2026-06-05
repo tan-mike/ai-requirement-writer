@@ -2,24 +2,28 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api'
-import { ProjectCard } from '@/components/ProjectCard'
+import { useAuth } from '@/lib/auth'
+import { ProjectCard, Project } from '@/components/ProjectCard'
 import ProjectContextManager from '@/components/ProjectContextManager'
 import GuidedTour from '@/components/GuidedTour'
 
-interface Project {
-  id: number; name: string; type: string; status: string; mode: string; created_at: string
-}
-
 export default function DashboardPage() {
+  const { user, settings, refreshUser } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    refreshUser() // Ensure we have latest settings
     apiClient.get<{ data: Project[] }>('/projects')
       .then(res => setProjects(res.data))
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
+
+  const curatedProjects = projects.filter(p => p.is_curated)
+  const myProjects = projects.filter(p => !p.is_curated)
+
+  const canCreate = user?.role === 'admin' || (settings ? !settings.creation_disabled : false)
 
   return (
     <div>
@@ -28,10 +32,12 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Projects</h1>
           <p className="text-muted-foreground mt-1">Manage and view your requirement generation projects.</p>
         </div>
-        <Link href="/projects/new" id="tour-new-project-btn" className="btn-primary flex items-center gap-2">
-          <span>New project</span>
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-        </Link>
+        {canCreate && (
+          <Link href="/projects/new" id="tour-new-project-btn" className="btn-primary flex items-center gap-2">
+            <span>New project</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          </Link>
+        )}
       </div>
       
       {loading && (
@@ -48,13 +54,29 @@ export default function DashboardPage() {
           </div>
           <h2 className="text-xl font-semibold text-foreground">No projects yet</h2>
           <p className="text-muted-foreground mt-2 max-w-xs mx-auto">Create your first project to start generating high-quality requirements.</p>
-          <Link href="/projects/new" className="btn-primary mt-6">Create first project</Link>
+          {canCreate && (
+            <Link href="/projects/new" className="btn-primary mt-6">Create first project</Link>
+          )}
         </div>
       )}
       
-      <div className="grid gap-6 md:grid-cols-2 mb-12">
-        {projects.map(p => <ProjectCard key={p.id} project={p} />)}
-      </div>
+      {!loading && curatedProjects.length > 0 && (
+        <div className="mb-12">
+          <h2 className="text-lg font-bold text-foreground mb-4">Curated Templates</h2>
+          <div className="grid gap-6 md:grid-cols-2">
+            {curatedProjects.map(p => <ProjectCard key={p.id} project={p} />)}
+          </div>
+        </div>
+      )}
+
+      {!loading && myProjects.length > 0 && (
+        <div className="mb-12">
+          <h2 className="text-lg font-bold text-foreground mb-4">My Projects</h2>
+          <div className="grid gap-6 md:grid-cols-2">
+            {myProjects.map(p => <ProjectCard key={p.id} project={p} />)}
+          </div>
+        </div>
+      )}
 
       <div id="tour-contexts-section">
         <ProjectContextManager />

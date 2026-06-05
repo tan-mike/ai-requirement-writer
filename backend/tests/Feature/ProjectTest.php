@@ -25,6 +25,7 @@ class ProjectTest extends TestCase
 
     public function test_user_can_create_a_project(): void
     {
+        config(['projects.creation_disabled' => false]);
         $template = Template::factory()->create(['type' => 'webapp']);
 
         $response = $this->actingAs($this->user)
@@ -47,6 +48,7 @@ class ProjectTest extends TestCase
 
     public function test_project_is_ready_immediately_if_no_processing_needed(): void
     {
+        config(['projects.creation_disabled' => false]);
         $template = Template::factory()->create(['type' => 'webapp']);
 
         $response = $this->actingAs($this->user)
@@ -68,6 +70,7 @@ class ProjectTest extends TestCase
 
     public function test_user_can_list_their_own_projects(): void
     {
+        $this->user->update(['role' => 'admin']);
         Project::factory()->count(2)->create([
             'user_id' => $this->user->id,
             'lead_persona_id' => $this->persona->id

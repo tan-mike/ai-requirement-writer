@@ -13,9 +13,10 @@ interface TemplateField {
   tooltip?: string
 }
 
-interface Project {
+interface Feature {
   id: number
   name: string
+  status: string
   template: {
     fields: TemplateField[]
   }
@@ -24,25 +25,25 @@ interface Project {
   }
 }
 
-export default function IntakePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function IntakePage({ params }: { params: Promise<{ id: string, feature_id: string }> }) {
+  const { id: projectId, feature_id: featureId } = use(params)
   const router = useRouter()
-  const [project, setProject] = useState<Project | null>(null)
+  const [feature, setFeature] = useState<Feature | null>(null)
   const [formValues, setFormValues] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
-    apiClient.get<{ data: Project }>(`/projects/${id}`)
+    apiClient.get<{ data: Feature }>(`/features/${featureId}`)
       .then(res => {
-        setProject(res.data)
+        setFeature(res.data)
         if (res.data.intake?.fields) {
           setFormValues(res.data.intake.fields)
         }
       })
-      .catch(() => setLoadError('Failed to load project'))
-  }, [id])
+      .catch(() => setLoadError('Failed to load feature details'))
+  }, [featureId])
 
   function handleChange(key: string, value: string) {
     setFormValues(prev => ({ ...prev, [key]: value }))
@@ -50,7 +51,9 @@ export default function IntakePage({ params }: { params: Promise<{ id: string }>
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const fields = project?.template?.fields ?? []
+    if (feature?.status === 'completed') return
+
+    const fields = feature?.template?.fields ?? []
     const missing = fields.filter(f => f.required && !formValues[f.key]?.trim())
     if (missing.length > 0) {
       setError(`Please fill in all required fields: ${missing.map(f => f.label).join(', ')}`)
@@ -58,8 +61,8 @@ export default function IntakePage({ params }: { params: Promise<{ id: string }>
     }
     setSubmitting(true)
     try {
-      await apiClient.post(`/projects/${id}/intake`, { fields: formValues })
-      router.push(`/projects/${id}/generate`)
+      await apiClient.post(`/features/${featureId}/intake`, { fields: formValues })
+      router.push(`/projects/${projectId}/features/${featureId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')
     } finally {
@@ -74,35 +77,46 @@ export default function IntakePage({ params }: { params: Promise<{ id: string }>
     </div>
   )
   
-  if (!project) return (
+  if (!feature) return (
     <div className="flex flex-col items-center justify-center py-20 text-muted">
       <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p className="font-medium">Loading project intake details...</p>
+      <p className="font-medium">Loading feature intake details...</p>
     </div>
   )
 
-  const fields = project.template?.fields ?? []
+  const isCompleted = feature.status === 'completed'
+  const fields = feature.template?.fields ?? []
 
   return (
     <div className="max-w-3xl mx-auto">
-      <Link href="/dashboard" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition-colors mb-6 group w-fit">
+      <Link href={`/projects/${projectId}/features/${featureId}`} className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition-colors mb-6 group w-fit">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 transition-transform group-hover:-translate-x-1"><path d="m15 18-6-6 6-6"/></svg>
-        Back to Dashboard
+        Back to Feature
       </Link>
 
       <div className="card p-10">
         <div className="mb-10 text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">{project.name}</h1>
-          <p className="text-muted-foreground mt-2">Fill in the project details to provide context for the AI agents.</p>
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">{feature.name}</h1>
+            {isCompleted && (
+                <span className="bg-emerald-500 text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm shadow-emerald-500/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Finalized
+                </span>
+            )}
+          </div>
+          <p className="text-muted-foreground mt-2">
+            {isCompleted ? 'This requirement set is finalized and read-only.' : 'Fill in the feature details to provide context for the AI agents.'}
+          </p>
         </div>
 
         {error && (
-          <div role="alert" aria-live="polite" className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-8">
+          <div role="alert" aria-live="polite" className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-8">
             <p className="text-red-700 dark:text-red-400 text-sm font-semibold">{error}</p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={handleSubmit} className={`space-y-8 ${isCompleted ? 'opacity-60 pointer-events-none' : ''}`}>
           {fields.map(field => (
             <div key={field.key} className="space-y-1.5">
               <div className="flex items-center gap-2 mb-1.5">
@@ -119,6 +133,7 @@ export default function IntakePage({ params }: { params: Promise<{ id: string }>
                   rows={5}
                   className="w-full bg-surface border-2 border-border rounded-xl px-4 py-3 text-sm focus:border-primary transition-all outline-none resize-y leading-relaxed"
                   placeholder={`Enter ${field.label.toLowerCase()}...`}
+                  disabled={isCompleted}
                 />
               ) : (
                 <input
@@ -127,25 +142,28 @@ export default function IntakePage({ params }: { params: Promise<{ id: string }>
                   onChange={e => handleChange(field.key, e.target.value)}
                   className="input text-base"
                   placeholder={`Enter ${field.label.toLowerCase()}...`}
+                  disabled={isCompleted}
                 />
               )}
             </div>
           ))}
 
-          <div className="pt-4">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="btn-primary w-full py-4 text-base shadow-lg shadow-primary/20"
-            >
-              {submitting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Saving & Generating...
-                </span>
-              ) : 'Save & Generate Requirements'}
-            </button>
-          </div>
+          {!isCompleted && (
+            <div className="pt-4">
+                <button
+                type="submit"
+                disabled={submitting}
+                className="btn-primary w-full py-4 text-base shadow-lg shadow-primary/20"
+                >
+                {submitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Saving & Generating...
+                    </span>
+                ) : 'Save & Generate Requirements'}
+                </button>
+            </div>
+          )}
         </form>
       </div>
     </div>

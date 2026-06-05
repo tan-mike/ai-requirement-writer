@@ -14,6 +14,7 @@ interface User {
 interface AuthContextType {
   user: User | null
   token: string | null
+  settings: { creation_disabled: boolean } | null
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<void>
   logout: () => Promise<void>
@@ -27,14 +28,30 @@ const AuthContext = createContext<AuthContextType | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(null)
+  const [settings, setSettings] = useState<{ creation_disabled: boolean } | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const safeParse = (val: string | null) => {
+      if (!val || val === 'undefined') return null
+      try {
+        return JSON.parse(val)
+      } catch (e) {
+        return null
+      }
+    }
+
     const stored = localStorage.getItem('token')
     const storedUser = localStorage.getItem('user')
-    if (stored && storedUser) {
-      setToken(stored)
-      setUser(JSON.parse(storedUser))
+    const storedSettings = localStorage.getItem('settings')
+    
+    if (stored && storedUser && storedUser !== 'undefined') {
+      const parsedUser = safeParse(storedUser)
+      if (parsedUser) {
+        setToken(stored)
+        setUser(parsedUser)
+        setSettings(safeParse(storedSettings))
+      }
     }
     setLoading(false)
   }, [])
@@ -48,6 +65,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('user', JSON.stringify(res.data.user))
     setToken(res.data.token)
     setUser(res.data.user)
+    // Refresh user after login to get settings
+    await refreshUser()
   }
 
   async function register(name: string, email: string, password: string) {
@@ -59,23 +78,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('user', JSON.stringify(res.data.user))
     setToken(res.data.token)
     setUser(res.data.user)
+    // Refresh user after register to get settings
+    await refreshUser()
   }
 
   async function logout() {
     await apiClient.post('/auth/logout', {})
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    localStorage.removeItem('settings')
     setToken(null)
     setUser(null)
+    setSettings(null)
   }
 
   async function refreshUser() {
     try {
-      const res = await apiClient.get<{ data: User }>('/user/me')
-      const data = res.data;
-      const updatedUser = { ...user, ...data } as User;
-      localStorage.setItem('user', JSON.stringify(updatedUser))
+      const res = await apiClient.get<{ data: User; settings: { creation_disabled: boolean } }>('/user/me')
+      const { data, settings: newSettings } = res;
+      const updatedUser = { ...(user || {}), ...data } as User;
+      
+      if (updatedUser) localStorage.setItem('user', JSON.stringify(updatedUser))
+      if (newSettings) localStorage.setItem('settings', JSON.stringify(newSettings))
+      
       setUser(updatedUser);
+      if (newSettings) setSettings(newSettings);
     } catch (err) {
       // ignore
     }
@@ -88,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, refreshUser, switchTeam, loading }}>
+    <AuthContext.Provider value={{ user, token, settings, login, register, logout, refreshUser, switchTeam, loading }}>
       {children}
     </AuthContext.Provider>
   )

@@ -4,21 +4,23 @@ import ReactMarkdown from 'react-markdown'
 import { apiClient } from '@/lib/api'
 
 interface Props {
-  projectId: string
+  featureId: string
   draft: { id: number; content: string | null; status: string }
   onApproved: () => void
+  readOnly?: boolean
 }
 
-export default function DraftEditor({ projectId, draft, onApproved }: Props) {
+export default function DraftEditor({ featureId, draft, onApproved, readOnly = false }: Props) {
   const [content, setContent] = useState(draft.content ?? '')
   const [saving, setSaving] = useState(false)
   const [approving, setApproving] = useState(false)
   const [error, setError] = useState('')
 
   async function handleSave() {
+    if (readOnly) return
     setSaving(true)
     try {
-      await apiClient.patch(`/projects/${projectId}/drafts/${draft.id}`, { content })
+      await apiClient.patch(`/features/${featureId}/drafts/${draft.id}`, { content })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed')
     } finally {
@@ -27,9 +29,10 @@ export default function DraftEditor({ projectId, draft, onApproved }: Props) {
   }
 
   async function handleApprove() {
+    if (readOnly) return
     setApproving(true)
     try {
-      await apiClient.post(`/projects/${projectId}/drafts/${draft.id}/approve`, {})
+      await apiClient.post(`/features/${featureId}/drafts/${draft.id}/approve`, {})
       onApproved()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Approve failed')
@@ -73,18 +76,20 @@ export default function DraftEditor({ projectId, draft, onApproved }: Props) {
         </div>
       </div>
       
-      <div className="flex gap-4">
-        <button onClick={handleSave} disabled={saving}
-          className="flex-1 px-4 py-2.5 rounded-lg text-sm font-bold border border-border bg-surface hover:bg-surface-hover transition-colors disabled:opacity-50"
-        >
-          {saving ? 'Saving changes...' : 'Save Draft'}
-        </button>
-        <button onClick={handleApprove} disabled={approving}
-          className="btn-primary flex-1 py-2.5 shadow-lg shadow-primary/20"
-        >
-          {approving ? 'Approving...' : 'Approve & Finalize'}
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="flex gap-4">
+            <button onClick={handleSave} disabled={saving}
+            className="flex-1 px-4 py-2.5 rounded-lg text-sm font-bold border border-border bg-surface hover:bg-surface-hover transition-colors disabled:opacity-50"
+            >
+            {saving ? 'Saving changes...' : 'Save Draft'}
+            </button>
+            <button onClick={handleApprove} disabled={approving}
+            className="btn-primary flex-1 py-2.5 shadow-lg shadow-primary/20"
+            >
+            {approving ? 'Approving...' : 'Approve & Finalize'}
+            </button>
+        </div>
+      )}
     </div>
   )
 }

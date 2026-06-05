@@ -2,107 +2,95 @@
 
 Automated tool to generate Business Requirements Documents (BRD), User Stories, and Technical Specifications using Google Gemini 2.0.
 
-## Features
+## 🌟 The Agentic Architecture
 
-- **Multi-Step Generation:** Guided flow from BRD → User Stories → Technical Spec.
-- **Flexible Context:** Start from scratch, upload files, or select from your library of reusable **Saved Contexts**.
-- **Template Mode:** Quick generation based on structured project intake forms.
-- **Conversational Mode (AI Interview):** A "Principal Architect" AI grills you to distill true business requirements.
-- **Codebase Awareness:** Connect GitHub or local repos. The AI analyzes your existing architecture to ensure new features maintain system integrity.
-- **Agentic Persona System:** Select specialized Lead personas (Fintech, Enterprise) and a Review Committee (Security, UX, Performance) for multi-agent refinement.
-- **Reusable Contexts:** Save and name technical context snippets for reuse across generations.
-- **Markdown Editor:** Review, edit, and version your requirement drafts.
+This system is an **Agentic AI Architect** designed for continuous product evolution. Projects are not isolated drafts; they are permanent containers for your product's lifecycle, powered by an evolving **Project Knowledge Base (PKB)**.
 
----
+### Core Concepts
 
-## Architecture
-
-- **Backend:** Laravel 13 (PHP 8.3)
-- **Frontend:** Next.js 16 (React 19, TypeScript)
-- **AI:** Google Gemini 2.0 Flash (via `google-gemini-php/laravel`)
-- **Database:** SQLite (default) or MySQL
+- **Project Containers:** Create a container for your product (e.g., "E-commerce Platform"). Projects act as the root context for all future enhancements.
+- **Continuous Features:** Add multiple **Features** to a project over time. Each feature has its own discovery and generation lifecycle.
+- **Knowledge Persistence:** Approved features are automatically committed to the PKB. The AI "remembers" past decisions, ensuring that new features never contradict established business logic or technical architecture.
+- **Google Drive Sync:** All baseline documentation (Contexts) and Expert Agent definitions (Skills) are synced dynamically from Google Drive. Update your AI's instructions by simply editing a markdown file—no code changes required.
 
 ---
 
-## Setup & Deployment
+## 🏗 Tech Stack
 
-### Option 1: Local Development (Manual)
-
-Best for development and active contribution.
-
-**Backend:**
-1. `cd backend && composer install`
-2. `cp .env.example .env` (Set `GEMINI_API_KEY`)
-3. `php artisan key:generate`
-4. `php artisan migrate --seed`
-5. `php artisan queue:listen --timeout=3600` (In a separate terminal)
-6. `php artisan serve` (Runs on `http://localhost:8000`)
-
-**Frontend:**
-1. `cd frontend && npm install`
-2. `npm run dev` (Runs on `http://localhost:3000`)
+- **Backend:** Laravel 11 (PHP 8.3)
+- **Frontend:** Next.js 15 (React 19, TypeScript)
+- **AI:** Google Gemini 2.0 Flash
+- **Database:** MySQL 8.0
 
 ---
 
-### Option 2: Docker / Hosted (Unified)
+## 🚀 Setup & Deployment
 
-Best for production, internal team hosting, or quick evaluation. This builds the frontend and backend into a **single container** served from a **single address**.
+### Option A: Local Docker (Single Container)
 
-1. **Build the image:**
+Builds the entire stack into a single container for easy local testing.
+
+**Prerequisites:** Docker Desktop.
+
+1. **Create Network & DB:**
    ```bash
-   docker build -t ai-requirement-writer .
+   docker network create ai-writer-net
+   docker run -d --name ai-db --network ai-writer-net -e MYSQL_DATABASE=ai_writer -e MYSQL_ROOT_PASSWORD=root_pass mysql:8
    ```
 
-2. **Run the container:**
+2. **Build & Run:**
    ```bash
-   docker run -p 80:80 \
-     -e GEMINI_API_KEY=your_key_here \
-     -e DB_CONNECTION=mysql \
-     -e DB_HOST=your_rds_host \
-     -e QUEUE_WORKER_COUNT=4 \
+   docker build -t ai-requirement-writer .
+   docker run -it --rm -p 8080:80 --name ai-app --network ai-writer-net \
+     -e DB_CONNECTION=mysql -e DB_HOST=ai-db -e DB_DATABASE=ai_writer -e DB_USERNAME=root -e DB_PASSWORD=root_pass \
+     -e GEMINI_API_KEY=your_key \
+     -e GOOGLE_DRIVE_CONTEXTS_FOLDER_ID=your_id \
      ai-requirement-writer
    ```
 
-**Features of the Unified Docker Image:**
-- **Single Port:** Everything (Frontend + API) is served on port 80.
-- **Standalone Frontend:** Next.js runs in standalone mode for full dynamic route support.
-- **Auto-Scale Workers:** Set `QUEUE_WORKER_COUNT` to handle concurrent AI reviews.
-- **Self-Healing:** Managed by Supervisor inside the container.
+---
+
+### Option B: Local Development
+
+1. **Backend:** `composer install`, configure `.env`, `php artisan migrate --seed`, `php artisan queue:listen`.
+2. **Frontend:** `npm install`, `npm run dev`.
 
 ---
 
-## Usage
+## 🛠 Configuration (Google Drive Sync)
 
-1. **Register/Login:** Create an account to manage projects.
-2. **New Project:** 
-   - Choose **Template Mode** for quick forms.
-   - Choose **Conversational Mode** to be interviewed by the AI.
-   - (Optional) Link a **GitHub URL** or **Local Path** to give the AI context of your existing codebase.
-3. **Discovery:**
-   - **Template:** Fill in project details (goals, features, constraints).
-   - **Conversational:** Answer the AI's probing questions. The AI will push back if your ideas conflict with existing architecture. Type until the AI determines requirements are ready.
-4. **Generate:**
-   - **BRD:** Generate the Business Requirements Document.
-   - **User Stories:** Once BRD is approved, generate stories.
-   - **Spec:** Once stories are approved, generate Technical Specification.
-5. **Review & Edit:** Edit generated drafts in the markdown editor before approval.
+Dynamic sync is the **primary method** for managing contexts and skills.
+
+1. **Service Account:** Create a Google Cloud Service Account and download the JSON key.
+2. **Folder IDs:** Obtain Folder IDs for your Contexts and Personas folders.
+3. **Environment Variables:**
+   ```env
+   GOOGLE_SERVICE_ACCOUNT_JSON=/path/to/credentials.json
+   GOOGLE_DRIVE_FOLDER_ID=your_skills_folder_id
+   GOOGLE_DRIVE_CONTEXTS_FOLDER_ID=your_contexts_folder_id
+   ```
+4. **Syncing:** Run `php artisan skills:sync` and `php artisan contexts:sync`.
 
 ---
 
-## Hosting & Deployment
+## 💻 Workflow
 
-### Backend (Laravel)
+### 1. Project Initialization
+Create a **Project Container**. Link any relevant baseline documentation (Contexts) synced from Google Drive. These documents provide the foundation for every feature built within this project.
 
-- **Server:** Any PHP 8.3 compatible environment (Forge, DigitalOcean, Vapor).
-- **Env Vars:** Ensure `APP_KEY`, `DB_*`, and `GEMINI_API_KEY` are set.
-- **Worker:** You **MUST** run a persistent queue worker (e.g., via Supervisor) to handle repository ingestion: `php artisan queue:work`.
-- **Optimization:** Run `php artisan optimize` in production.
+### 2. Feature Discovery
+Add a new **Feature** to your project. Choose between:
+- **AI Discovery Interview:** Conduct a "Challenger" interview where the AI grills your requirements to find the real need.
+- **Structured Intake:** Fill out a framework-based form tailored to the feature type.
 
-### AWS (Enterprise/Internal)
-For internal team deployments (10-20 users) requiring high-concurrency AI streaming, see the [AWS Deployment Guide](./DEPLOYMENT_AWS.md).
+### 3. Sequential Generation
+Generate your requirements in a logical sequence:
+1. **BRD:** High-level business needs.
+2. **User Stories:** Detailed functional breakdowns (unlocked after BRD approval).
+3. **Technical Spec:** Technical implementation details (unlocked after Stories approval).
 
-### Frontend (Next.js)
+### 4. Expert Review & Synthesis
+Optionally select **Reviewer Personas** (e.g., Security Lead, UI/UX Expert). They will audit your drafts and provide critiques. Use the **AI Synthesis** feature to automatically merge all feedback into a final, polished version.
 
-- **Platform:** Deploy to Vercel (recommended), Netlify, or a VPS.
-- **Env Vars:** Set `NEXT_PUBLIC_API_URL` to your backend API endpoint.
-- **Build:** `npm run build`
+### 5. Finalization
+Once satisfied, **Finalize** the feature. This locks the requirements as read-only and commits them to the project's permanent knowledge base.

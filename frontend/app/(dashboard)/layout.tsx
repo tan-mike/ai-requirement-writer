@@ -48,6 +48,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 >
                   Settings
                 </Link>
+                {user.role === 'admin' && (
+                  <Link 
+                    href="/admin" 
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      pathname.startsWith('/admin') 
+                        ? 'text-primary bg-primary/5' 
+                        : 'text-muted hover:text-foreground hover:bg-surface-hover'
+                    }`}
+                  >
+                    Admin
+                  </Link>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-6">

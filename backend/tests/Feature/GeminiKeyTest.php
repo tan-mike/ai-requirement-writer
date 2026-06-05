@@ -31,7 +31,7 @@ class GeminiKeyTest extends TestCase
     public function test_service_uses_personal_key_when_provided(): void
     {
         $user = User::factory()->create(['gemini_api_key' => 'user-key']);
-        $service = new GeminiGenerationService();
+        $service = app(\App\Services\GeminiGenerationService::class);
         
         $service->forUser($user);
         
@@ -45,7 +45,7 @@ class GeminiKeyTest extends TestCase
     public function test_service_falls_back_to_platform_key_when_missing(): void
     {
         $user = User::factory()->create(['gemini_api_key' => null]);
-        $service = new GeminiGenerationService();
+        $service = app(\App\Services\GeminiGenerationService::class);
         
         $service->forUser($user);
         
@@ -65,7 +65,7 @@ class GeminiKeyTest extends TestCase
         
         config(['gemini.platform_free_tier' => false]);
         
-        $service = new GeminiGenerationService();
+        $service = app(\App\Services\GeminiGenerationService::class);
         $service->forUser($user);
         
         $reflector = new \ReflectionClass($service);
@@ -84,7 +84,7 @@ class GeminiKeyTest extends TestCase
         
         config(['gemini.platform_free_tier' => false]);
         
-        $service = new GeminiGenerationService();
+        $service = app(\App\Services\GeminiGenerationService::class);
         $service->forUser($user);
         
         $reflector = new \ReflectionClass($service);

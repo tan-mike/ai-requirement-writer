@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Project;
+use App\Models\Feature;
 use App\Models\ChatMessage;
 use App\Services\GeminiGenerationService;
 use Illuminate\Http\JsonResponse;
@@ -13,66 +13,71 @@ class ChatController extends Controller
 {
     public function __construct(private GeminiGenerationService $gemini) {}
 
-    public function index(Request $request, Project $project): JsonResponse
+    public function index(Feature $feature): JsonResponse
     {
-        if ($project->user_id !== $request->user()->id) {
-            abort(403, 'Forbidden');
-        }
-
-        $messages = $project->chatMessages()->orderBy('order')->get();
-
-        return response()->json(['data' => $messages]);
+        return response()->json(['data' => $feature->chatMessages()->orderBy('created_at')->get()]);
     }
 
-    public function chat(Request $request, Project $project): StreamedResponse
+    public function clear(Feature $feature): JsonResponse
     {
-        if ($project->user_id !== $request->user()->id) {
-            abort(403, 'Forbidden');
-        }
+        $feature->chatMessages()->delete();
+        return response()->json(['message' => 'Chat history cleared']);
+    }
 
-        set_time_limit(120);
-
+    public function chat(Request $request, Feature $feature): StreamedResponse
+    {
         $request->validate([
             'message' => ['required', 'string'],
         ]);
 
+        $user = $request->user();
+        $project = $feature->project;
+
         // Save user message
-        $project->chatMessages()->create([
+        $feature->chatMessages()->create([
+            'user_id' => $user->id,
             'role' => 'user',
             'content' => $request->message,
-            'order' => $project->chatMessages()->count() + 1,
         ]);
 
-        $history = $project->chatMessages()->orderBy('order')->get()->toArray();
-        $architectureSummary = $project->architecture_summary ?? 'No existing architecture information available.';
-        $systemPrompt = $project->leadPersona?->system_prompt ?? 'You are a Senior Technical Business Analyst and Principal Architect.';
+        set_time_limit(0);
+        $this->gemini->forUser($user)->forFeature($feature);
 
-        $this->gemini->forUser($request->user(), $project);
+        $leadPersona = $feature->leadPersona;
+        if (!$leadPersona) {
+            $leadPersona = \App\Models\Persona::where('role', 'lead')->first();
+        }
 
-        return response()->stream(function () use ($project, $systemPrompt, $architectureSummary, $history) {
+        return response()->stream(function () use ($feature, $leadPersona, $user) {
             try {
                 $accumulated = '';
-                $this->gemini->streamDiscoveryChat($systemPrompt, $architectureSummary, $history, function (string $chunk) use (&$accumulated) {
-                    $accumulated .= $chunk;
-                    echo 'data: ' . json_encode(['text' => $chunk]) . "\n\n";
-                    ob_flush();
-                    flush();
-                });
+                $history = $feature->chatMessages()->orderBy('created_at')->get()->toArray();
+                
+                $this->gemini->streamDiscoveryChat(
+                    $leadPersona->system_prompt,
+                    $feature->project->architecture_summary ?? '',
+                    $history,
+                    function (string $chunk) use (&$accumulated) {
+                        $accumulated .= $chunk;
+                        echo 'data: ' . json_encode(['text' => $chunk]) . "\n\n";
+                        if (ob_get_level() > 0) ob_flush();
+                        flush();
+                    }
+                );
 
                 // Save assistant message
-                $project->chatMessages()->create([
+                $feature->chatMessages()->create([
+                    'user_id' => null, // system/assistant
                     'role' => 'assistant',
                     'content' => $accumulated,
-                    'order' => $project->chatMessages()->count() + 1,
                 ]);
 
                 echo "data: [DONE]\n\n";
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::error('Chat failed: ' . $e->getMessage());
                 echo 'data: ' . json_encode(['error' => 'Chat failed: ' . $e->getMessage()]) . "\n\n";
                 echo "data: [DONE]\n\n";
             }
-            ob_flush();
+            if (ob_get_level() > 0) ob_flush();
             flush();
         }, 200, [
             'Content-Type' => 'text/event-stream',

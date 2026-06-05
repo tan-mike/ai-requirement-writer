@@ -71,3 +71,5 @@ export const apiClient = {
   patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
   delete: <T>(path: string) => request<T>('DELETE', path),
 }
+
+export default apiClient

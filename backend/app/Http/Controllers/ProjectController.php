@@ -12,27 +12,44 @@ class ProjectController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $projects = Project::where(function($query) use ($user) {
-            $query->where('user_id', $user->id)
-                  ->when($user->current_team_id, function($q) use ($user) {
-                      $q->orWhere('team_id', $user->current_team_id);
-                  });
-        })
-        ->latest()
-        ->get();
+        $projects = Project::query()
+            ->when($user->role !== 'admin', function($query) use ($user) {
+                $query->where(function($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                      ->when($user->current_team_id, function($sq) use ($user) {
+                          $sq->orWhere('team_id', $user->current_team_id);
+                      })
+                      ->orWhere('is_curated', true);
+                });
+            })
+            ->latest()
+            ->get();
 
         return response()->json(['data' => $projects]);
     }
 
-    public function store(StoreProjectRequest $request): JsonResponse
+    public function store(Request $request): JsonResponse
     {
-        $data = $request->validated();
-        $contextFile = $request->file('context_file');
-        $contextIds = $request->input('context_ids', []);
-        $isTeamShared = $request->boolean('is_team_shared');
-        
-        unset($data['context_file'], $data['context_ids'], $data['is_team_shared']);
+        $creationDisabled = \App\Models\Setting::where('key', 'creation_disabled')->value('value') ?? config('projects.creation_disabled');
+        if (filter_var($creationDisabled, FILTER_VALIDATE_BOOLEAN) && $request->user()->role !== 'admin') {
+            return response()->json(['message' => 'Project creation is currently disabled.'], 403);
+        }
 
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'type' => ['required', 'in:webapp,mobile,api,data,custom'],
+            'is_team_shared' => ['boolean'],
+            'repository_url' => ['nullable', 'url'],
+            'repository_path' => ['nullable', 'string'],
+            'context_ids' => ['nullable', 'array'],
+            'context_ids.*' => ['exists:project_contexts,id'],
+        ]);
+
+        $contextIds = $request->input('context_ids', []);
+        unset($data['context_ids']);
+
+        $isTeamShared = $request->boolean('is_team_shared');
         $data['team_id'] = $isTeamShared ? $request->user()->current_team_id : null;
 
         $project = $request->user()->projects()->create($data);
@@ -41,11 +58,7 @@ class ProjectController extends Controller
             $project->projectContexts()->sync($contextIds);
         }
 
-        if ($contextFile) {
-            $project->update(['status' => Project::STATUS_PROCESSING]);
-            $path = $contextFile->store('temp_context');
-            \App\Jobs\ProcessContextFileJob::dispatch($project, $path);
-        } elseif ($project->repository_url || $project->repository_path) {
+        if ($project->repository_url || $project->repository_path) {
             $project->update(['status' => Project::STATUS_PROCESSING]);
             \App\Jobs\ProcessRepositoryJob::dispatch($project);
         } else {
@@ -61,11 +74,35 @@ class ProjectController extends Controller
         $isOwner = $project->user_id === $user->id;
         $isTeamMember = $project->team_id && $project->team_id === $user->current_team_id;
 
-        if (!$isOwner && !$isTeamMember) {
+        if (!$isOwner && !$isTeamMember && !$project->is_curated) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        return response()->json(['data' => $project->load(['template', 'leadPersona', 'intake'])]);
+        return response()->json(['data' => $project->load(['features', 'projectContexts'])]);
+    }
+
+    public function update(Request $request, Project $project): JsonResponse
+    {
+        if ($project->user_id !== $request->user()->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $data = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'type' => ['sometimes', 'in:webapp,mobile,api,data,custom'],
+            'context_ids' => ['nullable', 'array'],
+            'context_ids.*' => ['exists:project_contexts,id'],
+        ]);
+
+        if (isset($data['context_ids'])) {
+            $project->projectContexts()->sync($data['context_ids']);
+            unset($data['context_ids']);
+        }
+
+        $project->update($data);
+
+        return response()->json(['data' => $project->load('projectContexts')]);
     }
 
     public function destroy(Request $request, Project $project): JsonResponse
@@ -81,9 +118,9 @@ class ProjectController extends Controller
 
     public function complete(Request $request, Project $project): JsonResponse
     {
-        if ($project->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        // if ($project->user_id !== $request->user()->id) {
+        //     return response()->json(['message' => 'Forbidden'], 403);
+        // }
 
         $project->update(['status' => Project::STATUS_COMPLETE]);
 

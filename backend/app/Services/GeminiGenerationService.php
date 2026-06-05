@@ -10,14 +10,22 @@ use Gemini\Data\Content;
 use Gemini\Enums\Role;
 use Gemini\Laravel\Facades\Gemini;
 use Illuminate\Support\Facades\Log;
+use App\Services\MemoryGovernorService;
 
 class GeminiGenerationService
 {
     private string $model = 'gemma-4-26b-a4b-it';
     private ?User $currentUser = null;
     private ?Project $currentProject = null;
+    private ?\App\Models\Feature $currentFeature = null;
     private ?Client $customClient = null;
     private bool $effectiveFreeTier = false;
+    protected MemoryGovernorService $memory;
+
+    public function __construct(MemoryGovernorService $memory)
+    {
+        $this->memory = $memory;
+    }
 
     /**
      * Configure the service for a specific user and project context.
@@ -48,6 +56,13 @@ class GeminiGenerationService
         return $this;
     }
 
+    public function forFeature(\App\Models\Feature $feature): self
+    {
+        $this->currentFeature = $feature;
+        $this->currentProject = $feature->project;
+        return $this;
+    }
+
     /**
      * Get the active client (custom or platform default).
      */
@@ -68,30 +83,30 @@ class GeminiGenerationService
     /**
      * Stream BRD generation from intake fields and/or chat history.
      */
-    public function streamBrd(string $systemPrompt, array $intakeFields, array $chatHistory, array $additionalContexts, callable $onChunk): void
+    public function streamBrd(string $systemPrompt, array $intakeFields, array $chatHistory, array $additionalContexts, callable $onChunk, ?\App\Models\RequirementDraft $draft = null): void
     {
         $prompt = $this->buildBrdPrompt($intakeFields, $chatHistory, $additionalContexts);
-        $this->streamGeneration($systemPrompt, $prompt, $onChunk, 'brd');
+        $this->streamGeneration($systemPrompt, $prompt, $onChunk, 'brd', $draft);
     }
 
     /**
      * Stream User Stories generation from an approved BRD.
      */
-    public function streamStories(string $systemPrompt, string $approvedBrd, array $additionalContexts, callable $onChunk): void
+    public function streamStories(string $systemPrompt, string $approvedBrd, array $additionalContexts, callable $onChunk, ?\App\Models\RequirementDraft $draft = null): void
     {
         $prompt = $this->buildStoriesPrompt($approvedBrd, $additionalContexts);
         $fullSystemPrompt = $systemPrompt . "\n\nTASK: Now, focus specifically on generating high-quality User Stories. Use the format 'As a [user], I want [goal] so that [benefit]'. Include detailed acceptance criteria for each story.";
-        $this->streamGeneration($fullSystemPrompt, $prompt, $onChunk, 'stories');
+        $this->streamGeneration($fullSystemPrompt, $prompt, $onChunk, 'stories', $draft);
     }
 
     /**
      * Stream Technical Specification generation from an approved BRD and approved stories.
      */
-    public function streamSpec(string $systemPrompt, string $approvedBrd, string $approvedStories, array $additionalContexts, callable $onChunk): void
+    public function streamSpec(string $systemPrompt, string $approvedBrd, string $approvedStories, array $additionalContexts, callable $onChunk, ?\App\Models\RequirementDraft $draft = null): void
     {
         $prompt = $this->buildSpecPrompt($approvedBrd, $approvedStories, $additionalContexts);
         $fullSystemPrompt = $systemPrompt . "\n\nTASK: Now, focus specifically on generating a Technical Specification. Include: System Architecture, Data Models, API Contracts, and Security Considerations.";
-        $this->streamGeneration($fullSystemPrompt, $prompt, $onChunk, 'spec');
+        $this->streamGeneration($fullSystemPrompt, $prompt, $onChunk, 'spec', $draft);
     }
 
     /**
@@ -166,7 +181,7 @@ class GeminiGenerationService
     /**
      * Stream a synthesis of the original draft and committee critiques.
      */
-    public function streamSynthesis(string $systemPrompt, string $originalDraft, array $critiques, callable $onChunk, string $draftType = 'document'): void
+    public function streamSynthesis(string $systemPrompt, string $originalDraft, array $critiques, callable $onChunk, string $draftType = 'document', ?\App\Models\RequirementDraft $draft = null): void
     {
         $typeLabel = match($draftType) {
             'brd' => 'Business Requirements Document (BRD)',
@@ -191,7 +206,7 @@ class GeminiGenerationService
         TASK: Incorporate all feedback and provide the final, polished {$typeLabel} in markdown.
         FINAL VERSION:";
 
-        $this->streamGeneration($systemPrompt, $prompt, $onChunk, 'synthesis');
+        $this->streamGeneration($systemPrompt, $prompt, $onChunk, 'synthesis', $draft);
     }
 
     /**
@@ -248,24 +263,46 @@ class GeminiGenerationService
      */
     public function streamDiscoveryChat(string $systemPrompt, string $architectureSummary, array $history, callable $onChunk): void
     {
-        // Strip generation-only mandates from the system prompt if they exist
-        $cleanSystemPrompt = str_replace(
-            "CRITICAL MANDATE: Output ONLY the markdown document. Do NOT include any conversational preamble, internal reasoning, or concluding remarks. Start your response immediately with the first markdown heading (e.g., '# ' or '## ').",
-            "",
-            $systemPrompt
-        );
+        $hierarchy = [];
+        
+        // 1. Company Context
+        $companyCtx = $this->getCompanyContext();
+        if ($companyCtx) {
+            $hierarchy[] = "### COMPANY CONTEXT\n" . $companyCtx;
+        }
+
+        // 2. Module Context
+        $moduleCtx = $this->getModuleContexts();
+        if ($moduleCtx) {
+            $hierarchy[] = "### MODULE CONTEXT\n" . $moduleCtx;
+        }
+
+        // 3. Project Memory (RAG)
+        if ($this->currentProject) {
+            $lastUserMsg = collect($history)->where('role', 'user')->last()['content'] ?? '';
+            $ragModules = $this->memory->getRelevantContext($this->currentProject, $lastUserMsg);
+            $ragContext = $this->memory->formatContextForPrompt($ragModules);
+            if ($ragContext) {
+                $hierarchy[] = "### PROJECT MEMORY\n" . $ragContext;
+            }
+        }
+
+        $hierarchyStr = !empty($hierarchy) ? implode("\n\n---\n\n", $hierarchy) . "\n\n---\n\n" : "";
 
         $rules = "
         
         EXISTING ARCHITECTURE:
         {$architectureSummary}
         
+        {$hierarchyStr}
+        
         INTERVIEW RULES:
         - You are currently in a 'Discovery Interview' mode. Your goal is to grill the user's requirements to find the real need.
         - Ask ONE question at a time. Do not overwhelm the user.
         - Challenge the 'Why' behind every feature. Act as a skeptical but helpful product partner.
         - Protect the integrity of the existing architecture. If a user request introduces tech debt or contradicts the architecture, push back firmly.
-        - Once you have a crystal clear understanding of the Problem, Audience, Constraints, and Success Metrics, output exactly [READY_FOR_BRD] and nothing else.
+        - Once you have a crystal clear understanding of the Problem, Audience, Constraints, and Success Metrics, provide a warm, professional wrap-up message to the user. Summarize what you've learned and inform them that you are ready to generate the requirements.
+        - THEN, at the very end of that final message, output exactly [READY_FOR_BRD] to signal completion.
         
         STRICT RESPONSE FORMAT:
         - Output ONLY your response to the user.
@@ -274,7 +311,7 @@ class GeminiGenerationService
         - Be direct, professional, and conversational.
         ";
 
-        $fullSystemPrompt = trim($cleanSystemPrompt) . "\n\n" . trim($rules);
+        $fullSystemPrompt = trim($systemPrompt) . "\n\n" . trim($rules);
 
         $historyCollection = collect($history);
         $lastMessage = $historyCollection->pop();
@@ -349,8 +386,44 @@ class GeminiGenerationService
      * Run a single streaming generation call, invoking $onChunk for each non-empty text chunk.
      * Includes logic to strip preamble by anchoring to the first markdown heading.
      */
-    private function streamGeneration(string $systemPrompt, string $userPrompt, callable $onChunk, string $type = 'document'): void
+    private function streamGeneration(string $systemPrompt, string $userPrompt, callable $onChunk, string $type = 'document', ?\App\Models\RequirementDraft $draft = null): void
     {
+        $hierarchy = [];
+
+        // 0. FEATURE INTENT (Highest Priority - Targeted Refinement)
+        if ($draft && $draft->title) {
+            $intent = "### TARGET FEATURE: {$draft->title}\n";
+            if ($draft->description) {
+                $intent .= "USER INTENT: {$draft->description}";
+            }
+            $hierarchy[] = $intent;
+        }
+        
+        // 1. Company Context (Universal)
+        $companyCtx = $this->getCompanyContext();
+        if ($companyCtx) {
+            $hierarchy[] = "### COMPANY CONTEXT (Universal Mandates)\n" . $companyCtx;
+        }
+
+        // 2. Module Context (Project Attached)
+        $moduleCtx = $this->getModuleContexts();
+        if ($moduleCtx) {
+            $hierarchy[] = "### MODULE CONTEXT (Project-Specific Guides)\n" . $moduleCtx;
+        }
+
+        // 3. Project Memory (RAG)
+        if ($this->currentProject) {
+            $ragModules = $this->memory->getRelevantContext($this->currentProject, $userPrompt);
+            $ragContext = $this->memory->formatContextForPrompt($ragModules);
+            if ($ragContext) {
+                $hierarchy[] = "### PROJECT MEMORY (Related Historical Data)\n" . $ragContext;
+            }
+        }
+
+        if (!empty($hierarchy)) {
+            $systemPrompt = implode("\n\n---\n\n", $hierarchy) . "\n\n---\n\n" . $systemPrompt;
+        }
+
         if ($this->effectiveFreeTier) {
             sleep(1); // Throttling for free tier start
         }
@@ -371,6 +444,7 @@ class GeminiGenerationService
                 'type' => $type,
                 'user_id' => $this->currentUser?->id,
                 'project_id' => $this->currentProject?->id,
+                'draft_id' => $draft?->id,
             ]);
 
             $buffer = '';
@@ -424,7 +498,8 @@ class GeminiGenerationService
                 inputTokens: $inputTokens,
                 outputTokens: $outputTokens,
                 totalTokens: $totalTokens,
-                executionTimeMs: $duration
+                executionTimeMs: $duration,
+                metadata: ['draft_id' => $draft?->id]
             );
 
         } catch (\Exception $e) {
@@ -436,7 +511,8 @@ class GeminiGenerationService
                 inputPrompt: $userPrompt,
                 outputText: $fullOutput ?: null,
                 executionTimeMs: $duration,
-                errorMessage: $e->getMessage()
+                errorMessage: $e->getMessage(),
+                metadata: ['draft_id' => $draft?->id]
             );
 
             throw $e;
@@ -466,6 +542,38 @@ class GeminiGenerationService
     }
 
     /**
+     * Get all company-wide global contexts formatted for prompts.
+     */
+    private function getCompanyContext(): string
+    {
+        $contexts = \App\Models\ProjectContext::where('is_global', true)->get();
+        if ($contexts->isEmpty()) {
+            return "";
+        }
+        
+        return $contexts->map(fn($ctx) => "### Company Context: {$ctx->name}\n{$ctx->content}")
+            ->implode("\n\n");
+    }
+
+    /**
+     * Get all project-attached module contexts formatted for prompts.
+     */
+    private function getModuleContexts(): string
+    {
+        if (!$this->currentProject) {
+            return "";
+        }
+
+        $contexts = $this->currentProject->projectContexts()->where('is_global', false)->get();
+        if ($contexts->isEmpty()) {
+            return "";
+        }
+
+        return $contexts->map(fn($ctx) => "### Module: {$ctx->name}\n{$ctx->content}")
+            ->implode("\n\n");
+    }
+
+    /**
      * Persist AI generation metrics and metadata.
      */
     private function recordLog(
@@ -485,6 +593,7 @@ class GeminiGenerationService
             AiGenerationLog::create([
                 'user_id' => $this->currentUser?->id,
                 'project_id' => $this->currentProject?->id,
+                'feature_id' => $this->currentFeature?->id,
                 'type' => $type,
                 'model' => $this->model,
                 'system_prompt' => $systemPrompt,
