@@ -20,6 +20,8 @@
 /public/storage
 /storage/*.key
 /storage/pail
+# Ignore secrets directory
+/storage/secrets/
 /vendor
 _ide_helper.php
 Homestead.json
