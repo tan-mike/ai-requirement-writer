@@ -82,10 +82,7 @@ jobs:
           #   type=semver,pattern={{version}},prefix=${{ inputs.app-env }}-,enabled=${{ inputs.app-env != 'production' }}
           #   type=sha,prefix=${{ inputs.app-env }}-
           tags: |
-            type=raw,value=${{ inputs.app-env }},enable=${{ inputs.app-env != 'production' }}
-            type=semver,pattern={{version}},enable=${{ inputs.app-env == 'production' }}
-            type=semver,pattern={{version}},prefix=${{ inputs.app-env }}-,enable=${{ inputs.app-env != 'production' }}
-            type=sha,prefix=${{ inputs.app-env }}-
+            type=raw,value=latest
 
       - name: 👷‍♂️ Build and push Docker image
         uses: docker/build-push-action@v6
@@ -93,7 +90,7 @@ jobs:
           context: .
           file: ${{ inputs.dockerfile }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ inputs.ecr-repository }}:latest
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=${{ steps.meta.outputs.version }}
@@ -111,11 +108,5 @@ jobs:
       - name: 🚀 Set image output
         id: image-info
         run: |
-          # Get the first tag after filtering out generic ones
-          FIRST_TAG=$(echo '${{ steps.meta.outputs.json }}' | 
-            jq -r 'first(.tags[] | select(test(":(dev|stg|production)$") | not)) ')
-          
-          echo "Using First Tag: $FIRST_TAG"
-          
-          # Safely write to GITHUB_OUTPUT
-          echo "image=$FIRST_TAG" >> "$GITHUB_OUTPUT"
+          # Set output to the repo with :latest tag
+          echo "image=${{ inputs.ecr-repository }}:latest" >> "$GITHUB_OUTPUT"

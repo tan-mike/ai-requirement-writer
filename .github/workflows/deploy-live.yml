@@ -35,7 +35,7 @@ jobs:
       role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/GITHUB_FWTA_ALIANCE_ROLE_ACCESS
       dockerfile: ./docker/Dockerfile
       app-env: "production"
-      tags: "latest, ${{ github.ref_name }}"
+      tags: "latest"
 
   # deploy-to-ecs-uat:
   #   needs: [call-ecr-workflow, set-env]
