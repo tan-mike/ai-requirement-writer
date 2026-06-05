@@ -18,7 +18,7 @@ interface ProjectPayload {
 }
 
 export default function NewProjectPage() {
-  const { user, settings, authLoading } = useAuth()
+  const { user, settings, loading: authLoading } = useAuth()
   const router = useRouter()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
