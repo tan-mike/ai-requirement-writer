@@ -10,10 +10,20 @@ class ChatMessage extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['project_id', 'role', 'content', 'order'];
+    protected $fillable = [
+        'feature_id',
+        'user_id',
+        'role',
+        'content',
+    ];
 
-    public function project(): BelongsTo
+    public function feature(): BelongsTo
     {
-        return $this->belongsTo(Project::class);
+        return $this->belongsTo(Feature::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

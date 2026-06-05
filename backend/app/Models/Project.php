@@ -15,32 +15,28 @@ class Project extends Model implements Auditable
 {
     use HasFactory, AuditableTrait;
 
-    const STATUS_DRAFT = 'draft';
+    const STATUS_ACTIVE = 'active';
+    const STATUS_ARCHIVED = 'archived';
     const STATUS_PROCESSING = 'processing';
     const STATUS_READY = 'ready';
     const STATUS_FAILED = 'error';
-    const STATUS_COMPLETE = 'complete';
 
     protected $fillable = [
         'user_id',
         'team_id',
-        'template_id',
         'name',
         'description',
         'type',
-        'mode',
         'status',
         'is_curated',
         'category',
         'repository_url',
         'repository_path',
         'architecture_summary',
-        'lead_persona_id'
     ];
 
     protected $attributes = [
-        'mode' => 'template',
-        'status' => 'draft',
+        'status' => 'active',
         'is_curated' => false,
     ];
 
@@ -61,34 +57,9 @@ class Project extends Model implements Auditable
         return $this->belongsTo(Team::class);
     }
 
-    public function leadPersona(): BelongsTo
+    public function features(): HasMany
     {
-        return $this->belongsTo(Persona::class, 'lead_persona_id');
-    }
-
-    public function template(): BelongsTo
-    {
-        return $this->belongsTo(Template::class);
-    }
-
-    public function intake(): HasOne
-    {
-        return $this->hasOne(ProjectIntake::class);
-    }
-
-    public function drafts(): HasMany
-    {
-        return $this->hasMany(RequirementDraft::class);
-    }
-
-    public function chatMessages(): HasMany
-    {
-        return $this->hasMany(ChatMessage::class);
-    }
-
-    public function aiGenerationLogs(): HasMany
-    {
-        return $this->hasMany(AiGenerationLog::class);
+        return $this->hasMany(Feature::class);
     }
 
     public function projectContexts(): BelongsToMany
@@ -99,10 +70,5 @@ class Project extends Model implements Auditable
     public function knowledgeModules(): HasMany
     {
         return $this->hasMany(ProjectKnowledgeModule::class);
-    }
-
-    public function stateGraph(): HasOne
-    {
-        return $this->hasOne(ProjectStateGraph::class);
     }
 }

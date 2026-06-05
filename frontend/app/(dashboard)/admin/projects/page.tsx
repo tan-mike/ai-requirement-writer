@@ -22,8 +22,8 @@ export default function AdminProjectsPage() {
 
   const fetchProjects = async () => {
     try {
-      const res = await api.get('/admin/projects')
-      setProjects(res.data.data)
+      const res = await api.get<{ data: Project[] }>('/admin/projects')
+      setProjects(res.data)
     } catch (e) {
       console.error(e)
     } finally {

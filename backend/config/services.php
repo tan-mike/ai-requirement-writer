@@ -38,6 +38,7 @@ return [
     'google' => [
         'drive' => [
             'folder_id' => env('GOOGLE_DRIVE_FOLDER_ID'),
+            'contexts_folder_id' => env('GOOGLE_DRIVE_CONTEXTS_FOLDER_ID'),
             'auth_method' => env('GOOGLE_AUTH_METHOD', 'service_account'),
             'service_account_json' => env('GOOGLE_SERVICE_ACCOUNT_JSON'),
             'client_id' => env('GOOGLE_CLIENT_ID'),

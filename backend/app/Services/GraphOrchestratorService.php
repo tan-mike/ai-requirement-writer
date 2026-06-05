@@ -1,17 +1,17 @@
 <?php
 namespace App\Services;
 
-use App\Models\Project;
-use App\Models\ProjectStateGraph;
+use App\Models\Feature;
+use App\Models\FeatureStateGraph;
 use App\Models\RequirementDraft;
 use App\Models\ProjectKnowledgeModule;
 use Illuminate\Support\Facades\DB;
 
 class GraphOrchestratorService {
-    public function transition(Project $project, string $targetNode, array $data = []): void {
-        DB::transaction(function () use ($project, $targetNode, $data) {
-            $graph = $project->stateGraph()->firstOrCreate(
-                ['project_id' => $project->id],
+    public function transition(Feature $feature, string $targetNode, array $data = []): void {
+        DB::transaction(function () use ($feature, $targetNode, $data) {
+            $graph = $feature->stateGraph()->firstOrCreate(
+                ['feature_id' => $feature->id],
                 ['current_node' => 'idle', 'context_data' => []]
             );
 
@@ -20,11 +20,11 @@ class GraphOrchestratorService {
                 'context_data' => array_merge($graph->context_data, $data)
             ]);
 
-            $this->handleNodeEntry($project, $targetNode, $graph);
+            $this->handleNodeEntry($feature, $targetNode, $graph);
         });
     }
 
-    protected function handleNodeEntry(Project $project, string $node, ProjectStateGraph $graph): void {
+    protected function handleNodeEntry(Feature $feature, string $node, FeatureStateGraph $graph): void {
         $data = $graph->context_data;
         $activeDraftId = $data['active_draft_id'] ?? null;
         $draft = $activeDraftId ? RequirementDraft::find($activeDraftId) : null;
@@ -47,29 +47,33 @@ class GraphOrchestratorService {
                 // Handle failure side effects
                 break;
             case 'committed':
-                $this->commitDraftToKnowledgeBase($project, $graph, $draft);
+                $this->commitDraftToKnowledgeBase($feature, $graph, $draft);
                 break;
         }
     }
 
-    private function commitDraftToKnowledgeBase(Project $project, ProjectStateGraph $graph, ?RequirementDraft $draft): void {
+    private function commitDraftToKnowledgeBase(Feature $feature, FeatureStateGraph $graph, ?RequirementDraft $draft): void {
         if (!$draft) {
             throw new \Exception("Cannot commit draft to knowledge base: RequirementDraft not found.");
         }
 
         ProjectKnowledgeModule::updateOrCreate(
             [
-                'project_id' => $project->id,
-                'title' => ucfirst($draft->type) . " (Version {$draft->version})",
+                'project_id' => $feature->project_id,
+                'title' => $feature->name . " - " . ucfirst($draft->type) . " (Version {$draft->version})",
                 'type' => 'requirement'
             ],
             [
                 'content' => $draft->content,
-                'metadata' => ['draft_id' => $draft->id, 'version' => $draft->version],
+                'metadata' => [
+                    'feature_id' => $feature->id,
+                    'draft_id' => $draft->id, 
+                    'version' => $draft->version
+                ],
                 'status' => 'active'
             ]
         );
 
-        $project->update(['status' => Project::STATUS_COMPLETE]);
+        $feature->update(['status' => Feature::STATUS_READY]);
     }
 }

@@ -12,7 +12,7 @@ class GoogleDriveSyncService
 
     public function __construct(?Drive $service = null)
     {
-        if ($service) {
+        if ($service && $service->getClient() && $service->getClient()->getScopes()) {
             $this->service = $service;
             return;
         }

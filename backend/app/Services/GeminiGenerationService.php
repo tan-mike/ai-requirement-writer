@@ -17,6 +17,7 @@ class GeminiGenerationService
     private string $model = 'gemma-4-26b-a4b-it';
     private ?User $currentUser = null;
     private ?Project $currentProject = null;
+    private ?\App\Models\Feature $currentFeature = null;
     private ?Client $customClient = null;
     private bool $effectiveFreeTier = false;
     protected MemoryGovernorService $memory;
@@ -52,6 +53,13 @@ class GeminiGenerationService
             }
         }
 
+        return $this;
+    }
+
+    public function forFeature(\App\Models\Feature $feature): self
+    {
+        $this->currentFeature = $feature;
+        $this->currentProject = $feature->project;
         return $this;
     }
 
@@ -293,7 +301,8 @@ class GeminiGenerationService
         - Ask ONE question at a time. Do not overwhelm the user.
         - Challenge the 'Why' behind every feature. Act as a skeptical but helpful product partner.
         - Protect the integrity of the existing architecture. If a user request introduces tech debt or contradicts the architecture, push back firmly.
-        - Once you have a crystal clear understanding of the Problem, Audience, Constraints, and Success Metrics, output exactly [READY_FOR_BRD] and nothing else.
+        - Once you have a crystal clear understanding of the Problem, Audience, Constraints, and Success Metrics, provide a warm, professional wrap-up message to the user. Summarize what you've learned and inform them that you are ready to generate the requirements.
+        - THEN, at the very end of that final message, output exactly [READY_FOR_BRD] to signal completion.
         
         STRICT RESPONSE FORMAT:
         - Output ONLY your response to the user.
@@ -584,6 +593,7 @@ class GeminiGenerationService
             AiGenerationLog::create([
                 'user_id' => $this->currentUser?->id,
                 'project_id' => $this->currentProject?->id,
+                'feature_id' => $this->currentFeature?->id,
                 'type' => $type,
                 'model' => $this->model,
                 'system_prompt' => $systemPrompt,

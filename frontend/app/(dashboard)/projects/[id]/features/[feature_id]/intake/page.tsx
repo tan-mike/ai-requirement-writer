@@ -13,7 +13,7 @@ interface TemplateField {
   tooltip?: string
 }
 
-interface Project {
+interface Feature {
   id: number
   name: string
   template: {
@@ -24,25 +24,25 @@ interface Project {
   }
 }
 
-export default function IntakePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function IntakePage({ params }: { params: Promise<{ id: string, feature_id: string }> }) {
+  const { id: projectId, feature_id: featureId } = use(params)
   const router = useRouter()
-  const [project, setProject] = useState<Project | null>(null)
+  const [feature, setFeature] = useState<Feature | null>(null)
   const [formValues, setFormValues] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
-    apiClient.get<{ data: Project }>(`/projects/${id}`)
+    apiClient.get<{ data: Feature }>(`/features/${featureId}`)
       .then(res => {
-        setProject(res.data)
+        setFeature(res.data)
         if (res.data.intake?.fields) {
           setFormValues(res.data.intake.fields)
         }
       })
-      .catch(() => setLoadError('Failed to load project'))
-  }, [id])
+      .catch(() => setLoadError('Failed to load feature details'))
+  }, [featureId])
 
   function handleChange(key: string, value: string) {
     setFormValues(prev => ({ ...prev, [key]: value }))
@@ -50,7 +50,7 @@ export default function IntakePage({ params }: { params: Promise<{ id: string }>
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const fields = project?.template?.fields ?? []
+    const fields = feature?.template?.fields ?? []
     const missing = fields.filter(f => f.required && !formValues[f.key]?.trim())
     if (missing.length > 0) {
       setError(`Please fill in all required fields: ${missing.map(f => f.label).join(', ')}`)
@@ -58,8 +58,8 @@ export default function IntakePage({ params }: { params: Promise<{ id: string }>
     }
     setSubmitting(true)
     try {
-      await apiClient.post(`/projects/${id}/intake`, { fields: formValues })
-      router.push(`/projects/${id}/generate`)
+      await apiClient.post(`/features/${featureId}/intake`, { fields: formValues })
+      router.push(`/projects/${projectId}/features/${featureId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')
     } finally {
@@ -74,26 +74,26 @@ export default function IntakePage({ params }: { params: Promise<{ id: string }>
     </div>
   )
   
-  if (!project) return (
+  if (!feature) return (
     <div className="flex flex-col items-center justify-center py-20 text-muted">
       <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-      <p className="font-medium">Loading project intake details...</p>
+      <p className="font-medium">Loading feature intake details...</p>
     </div>
   )
 
-  const fields = project.template?.fields ?? []
+  const fields = feature.template?.fields ?? []
 
   return (
     <div className="max-w-3xl mx-auto">
-      <Link href="/dashboard" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition-colors mb-6 group w-fit">
+      <Link href={`/projects/${projectId}/features/${featureId}`} className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition-colors mb-6 group w-fit">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 transition-transform group-hover:-translate-x-1"><path d="m15 18-6-6 6-6"/></svg>
-        Back to Dashboard
+        Back to Feature
       </Link>
 
       <div className="card p-10">
         <div className="mb-10 text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">{project.name}</h1>
-          <p className="text-muted-foreground mt-2">Fill in the project details to provide context for the AI agents.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">{feature.name}</h1>
+          <p className="text-muted-foreground mt-2">Fill in the feature details to provide context for the AI agents.</p>
         </div>
 
         {error && (

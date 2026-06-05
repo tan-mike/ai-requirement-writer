@@ -4,12 +4,12 @@ import ReactMarkdown from 'react-markdown'
 import { apiClient } from '@/lib/api'
 
 interface Props {
-  projectId: string
+  featureId: string
   draft: { id: number; content: string | null; status: string }
   onApproved: () => void
 }
 
-export default function DraftEditor({ projectId, draft, onApproved }: Props) {
+export default function DraftEditor({ featureId, draft, onApproved }: Props) {
   const [content, setContent] = useState(draft.content ?? '')
   const [saving, setSaving] = useState(false)
   const [approving, setApproving] = useState(false)
@@ -18,7 +18,7 @@ export default function DraftEditor({ projectId, draft, onApproved }: Props) {
   async function handleSave() {
     setSaving(true)
     try {
-      await apiClient.patch(`/projects/${projectId}/drafts/${draft.id}`, { content })
+      await apiClient.patch(`/features/${featureId}/drafts/${draft.id}`, { content })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed')
     } finally {
@@ -29,7 +29,7 @@ export default function DraftEditor({ projectId, draft, onApproved }: Props) {
   async function handleApprove() {
     setApproving(true)
     try {
-      await apiClient.post(`/projects/${projectId}/drafts/${draft.id}/approve`, {})
+      await apiClient.post(`/features/${featureId}/drafts/${draft.id}/approve`, {})
       onApproved()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Approve failed')

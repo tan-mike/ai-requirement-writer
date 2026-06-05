@@ -33,9 +33,10 @@ interface DraftsResponse {
   }
 }
 
-interface ProjectResponse {
+interface FeatureResponse {
   data: {
     id: number
+    project_id: number
     name: string
     status: string
     lead_persona_id: number
@@ -51,9 +52,9 @@ const STEPS: { key: Step; label: string; title: string }[] = [
   { key: 'spec', label: 'Technical Spec', title: 'Step 3 — Technical Spec' },
 ]
 
-export default function GeneratePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
-  const [project, setProject] = useState<ProjectResponse['data'] | null>(null)
+export default function FeatureViewPage({ params }: { params: Promise<{ id: string, feature_id: string }> }) {
+  const { id: projectId, feature_id: featureId } = use(params)
+  const [feature, setFeature] = useState<FeatureResponse['data'] | null>(null)
   const [drafts, setDrafts] = useState<Record<Step, Draft[]>>({ brd: [], stories: [], spec: [] })
   const [generating, setGenerating] = useState<Step | null>(null)
   const [synthesizing, setSynthesizing] = useState<number | null>(null)
@@ -62,20 +63,20 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
 
   const loadData = useCallback(async () => {
     try {
-      const [draftsRes, projectRes] = await Promise.all([
-        apiClient.get<DraftsResponse>(`/projects/${id}/drafts`),
-        apiClient.get<ProjectResponse>(`/projects/${id}`)
+      const [draftsRes, featureRes] = await Promise.all([
+        apiClient.get<DraftsResponse>(`/features/${featureId}/drafts`),
+        apiClient.get<FeatureResponse>(`/features/${featureId}`)
       ])
       setDrafts({
         brd: draftsRes.data.brd ?? [],
         stories: draftsRes.data.stories ?? [],
         spec: draftsRes.data.spec ?? [],
       })
-      setProject(projectRes.data)
+      setFeature(featureRes.data)
     } catch {
-      setError('Failed to load project data. Please refresh.')
+      setError('Failed to load feature data. Please refresh.')
     }
-  }, [id])
+  }, [featureId])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -109,15 +110,6 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
     setError('')
   }
 
-  async function handleComplete() {
-    try {
-      await apiClient.post(`/projects/${id}/complete`, {})
-      loadData()
-    } catch {
-      setError('Failed to mark project as complete')
-    }
-  }
-
   function generateBody(step: Step): Record<string, unknown> {
     const brd = latestDraft('brd')
     const stories = latestDraft('stories')
@@ -129,32 +121,15 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
 
   return (
     <div className="max-w-4xl space-y-12 pb-20">
-      <Link href="/dashboard" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition-colors mb-2 group w-fit">
+      <Link href={`/projects/${projectId}`} className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition-colors mb-2 group w-fit">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 transition-transform group-hover:-translate-x-1"><path d="m15 18-6-6 6-6"/></svg>
-        Back to Dashboard
+        Back to Project
       </Link>
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">Generate Requirements</h1>
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">{feature?.name}</h1>
           <p className="text-muted-foreground mt-2 text-lg">Build high-quality documentation with AI experts.</p>
-        </div>
-
-        <div className="flex-shrink-0">
-          {project?.status === 'complete' ? (
-            <div className="bg-emerald-100 text-emerald-700 px-6 py-3 rounded-xl font-bold border-2 border-emerald-200 flex items-center gap-2 shadow-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              Project Completed
-            </div>
-          ) : isApproved('brd') && (
-            <button
-              onClick={handleComplete}
-              className="btn-primary flex items-center gap-2 w-full sm:w-auto justify-center"
-            >
-              Mark as Completed
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-            </button>
-          )}
         </div>
       </div>
 
@@ -187,19 +162,27 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
 
               {!isGenerating && !isSynthesizing && (!draft || draft.status === 'failed') && (
                 <div id="tour-generation-strategy">
-                  <GenerationStrategy 
-                    label={`Start Generating ${step.label}`}
-                    onStart={(cfg) => startGeneration(step.key, cfg)}
-                    disabled={locked}
-                    leadPersonaName={project?.lead_persona?.name}
-                  />
+                  <div className="flex gap-4">
+                      <GenerationStrategy 
+                        label={`Start Generating ${step.label}`}
+                        onStart={(cfg) => startGeneration(step.key, cfg)}
+                        disabled={locked}
+                        leadPersonaName={feature?.lead_persona?.name}
+                      />
+                      {step === 'brd' && (
+                          <Link href={`/projects/${projectId}/features/${featureId}/chat`} className="btn-secondary px-6 flex items-center gap-2">
+                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                             Refine in Chat
+                          </Link>
+                      )}
+                  </div>
                 </div>
               )}
 
               {isGenerating && (
                 <StreamingOutput
-                  projectId={id}
-                  endpoint={`/projects/${id}/generate/${step.key}`}
+                  projectId={projectId}
+                  endpoint={`/features/${featureId}/generate/${step.key}`}
                   body={generateBody(step.key)}
                   onComplete={() => {
                     setGenerating(null)
@@ -219,8 +202,8 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
                     Synthesizing draft with committee feedback...
                   </div>
                   <StreamingOutput
-                    projectId={id}
-                    endpoint={`/projects/${id}/drafts/${draft.id}/synthesize`}
+                    projectId={projectId}
+                    endpoint={`/features/${featureId}/drafts/${draft.id}/synthesize`}
                     body={{}}
                     onComplete={() => {
                       setSynthesizing(null)
@@ -272,7 +255,7 @@ export default function GeneratePage({ params }: { params: Promise<{ id: string 
 
                     <div className="min-w-0">
                       <DraftEditor
-                        projectId={id}
+                        featureId={featureId}
                         draft={draft}
                         onApproved={loadData}
                       />

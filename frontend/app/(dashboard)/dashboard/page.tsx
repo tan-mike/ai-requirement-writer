@@ -2,15 +2,18 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 import { ProjectCard, Project } from '@/components/ProjectCard'
 import ProjectContextManager from '@/components/ProjectContextManager'
 import GuidedTour from '@/components/GuidedTour'
 
 export default function DashboardPage() {
+  const { user, settings, refreshUser } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    refreshUser() // Ensure we have latest settings
     apiClient.get<{ data: Project[] }>('/projects')
       .then(res => setProjects(res.data))
       .catch(console.error)
@@ -20,6 +23,8 @@ export default function DashboardPage() {
   const curatedProjects = projects.filter(p => p.is_curated)
   const myProjects = projects.filter(p => !p.is_curated)
 
+  const canCreate = user?.role === 'admin' || (settings ? !settings.creation_disabled : false)
+
   return (
     <div>
       <div className="flex justify-between items-end mb-8">
@@ -27,10 +32,12 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Projects</h1>
           <p className="text-muted-foreground mt-1">Manage and view your requirement generation projects.</p>
         </div>
-        <Link href="/projects/new" id="tour-new-project-btn" className="btn-primary flex items-center gap-2">
-          <span>New project</span>
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-        </Link>
+        {canCreate && (
+          <Link href="/projects/new" id="tour-new-project-btn" className="btn-primary flex items-center gap-2">
+            <span>New project</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          </Link>
+        )}
       </div>
       
       {loading && (
@@ -47,7 +54,9 @@ export default function DashboardPage() {
           </div>
           <h2 className="text-xl font-semibold text-foreground">No projects yet</h2>
           <p className="text-muted-foreground mt-2 max-w-xs mx-auto">Create your first project to start generating high-quality requirements.</p>
-          <Link href="/projects/new" className="btn-primary mt-6">Create first project</Link>
+          {canCreate && (
+            <Link href="/projects/new" className="btn-primary mt-6">Create first project</Link>
+          )}
         </div>
       )}
       

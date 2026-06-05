@@ -13,8 +13,8 @@ export default function AdminSettingsPage() {
 
   const fetchSettings = async () => {
     try {
-      const res = await api.get('/admin/settings')
-      setSettings(res.data.data)
+      const res = await api.get<{ data: Record<string, string> }>('/admin/settings')
+      setSettings(res.data)
     } catch (e) {
       console.error(e)
     } finally {

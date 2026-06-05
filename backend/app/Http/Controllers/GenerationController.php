@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\ProcessCritiqueJob;
 use App\Models\Persona;
-use App\Models\Project;
+use App\Models\Feature;
 use App\Models\ProjectContext;
 use App\Models\RequirementDraft;
 use App\Services\GeminiGenerationService;
@@ -15,26 +15,24 @@ class GenerationController extends Controller
 {
     public function __construct(private GeminiGenerationService $gemini) {}
 
-    public function brd(Request $request, Project $project): StreamedResponse
+    public function brd(Request $request, Feature $feature): StreamedResponse
     {
-        return $this->generate($request, $project, 'brd');
+        return $this->generate($request, $feature, 'brd');
     }
 
-    public function stories(Request $request, Project $project): StreamedResponse
+    public function stories(Request $request, Feature $feature): StreamedResponse
     {
-        return $this->generate($request, $project, 'stories');
+        return $this->generate($request, $feature, 'stories');
     }
 
-    public function spec(Request $request, Project $project): StreamedResponse
+    public function spec(Request $request, Feature $feature): StreamedResponse
     {
-        return $this->generate($request, $project, 'spec');
+        return $this->generate($request, $feature, 'spec');
     }
 
-    private function generate(Request $request, Project $project, string $type): StreamedResponse
+    private function generate(Request $request, Feature $feature, string $type): StreamedResponse
     {
-        if ($project->user_id !== $request->user()->id) {
-            abort(403, 'Forbidden');
-        }
+        $project = $feature->project;
 
         $request->validate([
             'reviewer_persona_ids' => ['nullable', 'array'],
@@ -49,11 +47,10 @@ class GenerationController extends Controller
 
         set_time_limit(0);
 
-        $this->gemini->forUser($request->user(), $project);
+        $this->gemini->forUser($request->user())->forFeature($feature);
 
-        $leadPersona = $project->leadPersona;
+        $leadPersona = $feature->leadPersona;
         if (!$leadPersona) {
-             // Fallback to general PM if not set (for legacy projects)
              $leadPersona = Persona::where('slug', 'lead_general_pm')->first() ?? Persona::where('role', 'lead')->first();
         }
 
@@ -79,20 +76,19 @@ class GenerationController extends Controller
             }
         }
 
-        $draft = $project->drafts()->create([
+        $draft = $feature->drafts()->create([
             'user_id' => $request->user()->id,
             'type' => $type,
-            'version' => $this->nextVersion($project, $type, $request->user()->id),
+            'version' => $this->nextVersion($feature, $type, $request->user()->id),
             'title' => $request->title,
             'description' => $request->description,
             'content' => '',
             'status' => 'drafting',
             'lead_persona_id' => $leadPersona->id,
             'reviewer_persona_ids' => $reviewers->pluck('id')->toArray(),
-            'critiques' => [], // Cast handles this, but ensures it's {} in DB
         ]);
 
-        return response()->stream(function () use ($project, $draft, $leadPersona, $reviewers, $contexts, $type, $request) {
+        return response()->stream(function () use ($feature, $draft, $leadPersona, $reviewers, $contexts, $type, $request) {
             try {
                 $accumulated = '';
 
@@ -104,8 +100,8 @@ class GenerationController extends Controller
                 };
 
                 if ($type === 'brd') {
-                    $intake = $project->intake?->fields ?? [];
-                    $chatHistory = $project->chatMessages()->orderBy('order')->get()->toArray();
+                    $intake = $feature->intake?->fields ?? [];
+                    $chatHistory = $feature->chatMessages()->orderBy('created_at')->get()->toArray();
                     $this->gemini->streamBrd($leadPersona->system_prompt, $intake, $chatHistory, $contexts->toArray(), $onChunk, $draft);
                 } elseif ($type === 'stories') {
                     $brd = RequirementDraft::findOrFail($request->brd_draft_id)->content;
@@ -119,7 +115,7 @@ class GenerationController extends Controller
                 $draft->update(['content' => $accumulated]);
 
                 if ($reviewers->isNotEmpty()) {
-                    app(\App\Services\GraphOrchestratorService::class)->transition($project, 'reviewing', [
+                    app(\App\Services\GraphOrchestratorService::class)->transition($feature, 'reviewing', [
                         'active_draft_id' => $draft->id,
                         'reviewer_ids' => $reviewers->pluck('id')->toArray()
                     ]);
@@ -129,7 +125,7 @@ class GenerationController extends Controller
                     }
                     echo 'data: ' . json_encode(['status' => 'reviewing']) . "\n\n";
                 } else {
-                    app(\App\Services\GraphOrchestratorService::class)->transition($project, 'approved', [
+                    app(\App\Services\GraphOrchestratorService::class)->transition($feature, 'approved', [
                         'active_draft_id' => $draft->id
                     ]);
                     echo 'data: ' . json_encode(['status' => 'approved']) . "\n\n";
@@ -138,7 +134,7 @@ class GenerationController extends Controller
                 echo "data: [DONE]\n\n";
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::error("{$type} generation failed: " . $e->getMessage());
-                app(\App\Services\GraphOrchestratorService::class)->transition($project, 'failed', [
+                app(\App\Services\GraphOrchestratorService::class)->transition($feature, 'failed', [
                     'active_draft_id' => $draft->id,
                     'error' => $e->getMessage()
                 ]);
@@ -154,22 +150,18 @@ class GenerationController extends Controller
         ]);
     }
 
-    public function synthesize(Request $request, Project $project, RequirementDraft $draft): StreamedResponse
+    public function synthesize(Request $request, Feature $feature, RequirementDraft $draft): StreamedResponse
     {
-        if ($project->user_id !== $request->user()->id || $draft->project_id !== $project->id) {
-            abort(403);
-        }
-
         if (!in_array($draft->status, ['refining', 'failed'])) {
             abort(422, 'Draft is not ready for synthesis. Status: ' . $draft->status);
         }
 
         set_time_limit(0);
-        $this->gemini->forUser($request->user(), $project);
+        $this->gemini->forUser($request->user())->forFeature($feature);
         
         $leadPersona = $draft->leadPersona;
 
-        return response()->stream(function () use ($project, $draft, $leadPersona) {
+        return response()->stream(function () use ($feature, $draft, $leadPersona) {
             try {
                 $accumulated = '';
                 $critiques = $draft->critiques()->with('persona')->get()
@@ -194,7 +186,7 @@ class GenerationController extends Controller
                     'content' => $accumulated
                 ]);
 
-                app(\App\Services\GraphOrchestratorService::class)->transition($project, 'approved', [
+                app(\App\Services\GraphOrchestratorService::class)->transition($feature, 'approved', [
                     'active_draft_id' => $draft->id
                 ]);
 
@@ -202,7 +194,7 @@ class GenerationController extends Controller
                 echo "data: [DONE]\n\n";
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::error('Synthesis failed: ' . $e->getMessage());
-                app(\App\Services\GraphOrchestratorService::class)->transition($project, 'failed', [
+                app(\App\Services\GraphOrchestratorService::class)->transition($feature, 'failed', [
                     'active_draft_id' => $draft->id,
                     'error' => $e->getMessage()
                 ]);
@@ -218,8 +210,8 @@ class GenerationController extends Controller
         ]);
     }
 
-    private function nextVersion(Project $project, string $type, int $userId): int
+    private function nextVersion(Feature $feature, string $type, int $userId): int
     {
-        return ($project->drafts()->where('type', $type)->where('user_id', $userId)->max('version') ?? 0) + 1;
+        return ($feature->drafts()->where('type', $type)->where('user_id', $userId)->max('version') ?? 0) + 1;
     }
 }

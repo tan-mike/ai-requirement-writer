@@ -2,43 +2,31 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AiGenerationLog extends Model
 {
-    public $timestamps = false;
+    use HasFactory;
 
     protected $fillable = [
+        'feature_id',
         'user_id',
-        'project_id',
         'type',
+        'prompt',
+        'response',
+        'tokens_used',
         'model',
-        'system_prompt',
-        'input_prompt',
-        'output_text',
-        'input_tokens',
-        'output_tokens',
-        'total_tokens',
-        'execution_time_ms',
-        'status',
-        'error_message',
-        'metadata',
-        'created_at',
     ];
 
-    protected $casts = [
-        'metadata' => 'array',
-        'created_at' => 'datetime',
-    ];
+    public function feature(): BelongsTo
+    {
+        return $this->belongsTo(Feature::class);
+    }
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function project(): BelongsTo
-    {
-        return $this->belongsTo(Project::class);
     }
 }
