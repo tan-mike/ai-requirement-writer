@@ -1,0 +1,50 @@
+name: 🌏 Deploy Live & UAT with Tags
+
+on:
+  push:
+    branches:
+      - main
+    # tags:
+    #   - 'v*.*.*'  # Trigger on version tags like v1.0.0
+
+
+permissions:  # ✅ Required for OIDC and repo access
+  id-token: write
+  contents: read
+
+jobs:
+  set-env:
+    runs-on: ubuntu-latest
+    outputs:
+      aws-ecr-repository: ${{ steps.vars.outputs.aws-ecr-repository }}
+      role-to-assume: ${{ steps.vars.outputs.role-to-assume }}
+    steps:
+      - name: 🚀 Set common variables
+        id: vars
+        run: |
+          echo "aws-ecr-repository=${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ vars.AWS_ECR_REPO }}" >> $GITHUB_OUTPUT
+          echo "role-to-assume=arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/fwta_safhis_api_uat-training-safhis-api-uat-gha-role" >> $GITHUB_OUTPUT
+  
+  call-ecr-workflow:
+    uses: ./.github/workflows/build-push-ecr.yml
+    needs: [set-env]
+    with:
+      aws-account: ${{ vars.AWS_ACCOUNT_ID }}
+      ecr-repository: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{vars.AWS_REGION }}.amazonaws.com/${{vars.AWS_ECR_REPO}}
+      aws-region: ${{ vars.AWS_REGION}}
+      role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/GITHUB_FWTA_ALIANCE_ROLE_ACCESS
+      dockerfile: ./containers/Dockerfile
+      app-env: "production"
+      tags: ${{ github.ref_name }}
+
+  # deploy-to-ecs-uat:
+  #   needs: [call-ecr-workflow, set-env]
+  #   uses: ./.github/workflows/deploy-ecs.yml
+  #   with:
+  #     aws-region: ${{ vars.AWS_REGION }}
+  #     role-to-assume: ${{ needs.set-env.outputs.role-to-assume }}
+  #     ecs-cluster: "fwta-training-ecs-cluster"
+  #     ecs-service: "fwta_safhis_api_uat-training-safhis-api-uat"
+  #     task-definition-family: "fwta_safhis_api_uat-training-safhis-api-uat"
+  #     container-name: "safhis-api-uat"
+  #     image: ${{ needs.call-ecr-workflow.outputs.image }}

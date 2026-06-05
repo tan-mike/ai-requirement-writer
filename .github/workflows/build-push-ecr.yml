@@ -1,0 +1,121 @@
+name: 🔁 Reusable - Build & Push to ECR (OIDC)
+
+on:
+  workflow_call:
+    inputs:
+      aws-account: 
+        required: true
+        type: string
+      ecr-repository:
+        required: true
+        type: string
+      aws-region:
+        required: true
+        type: string
+      role-to-assume:
+        required: true
+        type: string
+      dockerfile:
+        required: false
+        type: string
+        default: Dockerfile
+      context:
+        required: false
+        type: string
+        default: .
+      app-env:
+        type: string
+        description: "Environment to deploy (production, dev, stg)"
+        default: "production"
+      tags:
+        required: false
+        type: string
+        default: latest # Comma-separated
+    outputs:
+      image:
+        description: "The primary image URI pushed"
+        value: ${{ jobs.build-and-push.outputs.image }}
+    #   newrelic-daemon:
+    #     type: string
+    #     default: "newrelic-daemon:31339"
+    #   newrelic-version:
+    #     type: string
+    #     default: "12.0.0.25"
+    # secrets:
+    #   newrelic-licence-key:
+    #     required: true
+    #     description: "NEW RELIC LICENCE KEY"
+
+permissions:
+  id-token: write     # 🔐 Required for OIDC
+  contents: read      # 📥 Required for checkout
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.image-info.outputs.image }}
+    steps:
+      - name: 📥 Checkout source
+        uses: actions/checkout@v4
+
+      - name: 🔐 Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.role-to-assume}}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: 🔓 Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 🛠️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🖇️ Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ inputs.ecr-repository }}
+          # tags: |
+          #   type=raw,value=${{ inputs.app-env }}
+          #   type=semver,pattern={{version}},enabled=${{ inputs.app-env == 'production' }}
+          #   type=semver,pattern={{version}},prefix=${{ inputs.app-env }}-,enabled=${{ inputs.app-env != 'production' }}
+          #   type=sha,prefix=${{ inputs.app-env }}-
+          tags: |
+            type=raw,value=${{ inputs.app-env }},enable=${{ inputs.app-env != 'production' }}
+            type=semver,pattern={{version}},enable=${{ inputs.app-env == 'production' }}
+            type=semver,pattern={{version}},prefix=${{ inputs.app-env }}-,enable=${{ inputs.app-env != 'production' }}
+            type=sha,prefix=${{ inputs.app-env }}-
+
+      - name: 👷‍♂️ Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ inputs.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ steps.meta.outputs.version }}
+          # build-args: |
+          #   API_HOST=${{ inputs.api-host }}
+          #   API_NAME=${{ inputs.api-name }}-${{ inputs.app-env }}
+          # target: export
+          # secrets: |
+          #   "github_token=${{ secrets.GTOKEN }}"
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          # outputs: type=local,dest=./dist
+
+      - name: 🚀 Set image output
+        id: image-info
+        run: |
+          # Get the first tag after filtering out generic ones
+          FIRST_TAG=$(echo '${{ steps.meta.outputs.json }}' | 
+            jq -r 'first(.tags[] | select(test(":(dev|stg|production)$") | not)) ')
+          
+          echo "Using First Tag: $FIRST_TAG"
+          
+          # Safely write to GITHUB_OUTPUT
+          echo "image=$FIRST_TAG" >> "$GITHUB_OUTPUT"
