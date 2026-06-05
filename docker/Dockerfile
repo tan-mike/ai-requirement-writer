@@ -13,7 +13,9 @@ WORKDIR /var/www/html
 RUN docker-php-ext-install pdo_mysql
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 COPY backend/ .
-RUN composer update --no-dev --optimize-autoloader
+# Use `composer install` so the build uses composer.lock and avoids updating
+# packages during image build (safer and avoids advisory blocking).
+RUN composer install --no-dev --optimize-autoloader
 
 # Stage 3: Runtime
 FROM php:8.3-fpm-alpine

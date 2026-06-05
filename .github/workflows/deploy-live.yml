@@ -33,7 +33,7 @@ jobs:
       ecr-repository: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{vars.AWS_REGION }}.amazonaws.com/${{vars.AWS_ECR_REPO}}
       aws-region: ${{ vars.AWS_REGION}}
       role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/GITHUB_FWTA_ALIANCE_ROLE_ACCESS
-      dockerfile: ./containers/Dockerfile
+      dockerfile: ./docker/Dockerfile
       app-env: "production"
       tags: ${{ github.ref_name }}
 
