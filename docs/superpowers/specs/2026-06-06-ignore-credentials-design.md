@@ -4,22 +4,36 @@
 The Google Service Account credential file `google-sa-cred.json` was stored inside the `backend/storage/` directory and tracked in Git. Storing active private keys in version control poses a security risk.
 
 ## Proposed Design
-We will keep the file `backend/storage/google-sa-cred.json` locally on-disk, but we will untrack it from version control and configure git to ignore it.
+We will move the credentials file into a dedicated secrets folder (`backend/storage/secrets/`), untrack it from version control, and configure git to ignore the entire secrets folder.
 
-### 1. Untrack the Credential File
-We will remove `backend/storage/google-sa-cred.json` from the Git index without deleting the physical file:
+### 1. File Organization
+Create a dedicated `secrets` directory:
+- `backend/storage/secrets/`
+
+Move the credentials file:
+- From: `backend/storage/google-sa-cred.json`
+- To: `backend/storage/secrets/google-sa-cred.json`
+
+### 2. Untrack the Old Credential File
+Remove the old file path from the Git index:
 ```bash
 git rm --cached backend/storage/google-sa-cred.json
 ```
 
-### 2. Configure `.gitignore`
-We will update `backend/.gitignore` to ignore service account JSON credential files in the `storage/` directory:
+### 3. Configure `.gitignore`
+Update `backend/.gitignore` to ignore the entire `secrets` directory:
 ```gitignore
-# Prevent service account credentials from being committed
-/storage/*-cred.json
-/storage/*credentials*.json
+# Ignore secrets directory
+/storage/secrets/
+```
+
+### 4. Update Environment Variables (`backend/.env`)
+Update the path to the credentials JSON:
+```env
+GOOGLE_SERVICE_ACCOUNT_JSON=storage/secrets/google-sa-cred.json
 ```
 
 ## Verification
-- Verify that `backend/storage/google-sa-cred.json` remains on disk locally.
-- Verify that `git status` shows `backend/storage/google-sa-cred.json` is untracked and ignored.
+- Verify that `backend/storage/secrets/google-sa-cred.json` exists locally.
+- Verify that `git status` shows `backend/storage/secrets/` is ignored.
+- Verify that the sync functionality works as expected with the new path.
