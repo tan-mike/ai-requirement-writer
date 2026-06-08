@@ -16,7 +16,6 @@ jobs:
               # envs: AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION,ECR_REGISTRY
                   script: |
                       cd /var/www/html/writer.jobsarawak.com && \
-                      sudo su && \
-                      ./ecr-pull.sh && \
-                      docker compose pull && \
-                      docker compose up -d --remove-orphans
+                      sudo./ecr-pull.sh && \
+                      sudo docker compose pull && \
+                      sudo docker compose up -d --remove-orphans
