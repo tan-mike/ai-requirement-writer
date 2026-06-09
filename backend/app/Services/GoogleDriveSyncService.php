@@ -22,6 +22,7 @@ class GoogleDriveSyncService
         $config = Config::get('services.google.drive');
 
         if (($config['auth_method'] ?? 'service_account') === 'oauth') {
+            Log::debug($config);
             $client->setClientId($config['client_id']);
             $client->setClientSecret($config['client_secret']);
             $client->refreshToken($config['refresh_token']);
