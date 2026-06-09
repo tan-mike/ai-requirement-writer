@@ -81,7 +81,6 @@ class GoogleDriveSyncService
         $client->addScope(Drive::DRIVE_READONLY);
         $this->service = new Drive($client);
     }
-
     public function listFiles(string $folderId): array
     {
         Log::info("GoogleDriveSyncService: Listing files in folder ID: {$folderId}");
@@ -90,7 +89,9 @@ class GoogleDriveSyncService
         try {
             $results = $this->service->files->listFiles([
                 'q' => $query,
-                'fields' => 'files(id, name, modifiedTime)'
+                'fields' => 'files(id, name, modifiedTime)',
+                'supportsAllDrives' => true,
+                'includeItemsFromAllDrives' => true,
             ]);
             
             $rawFiles = $results->getFiles();
@@ -116,7 +117,10 @@ class GoogleDriveSyncService
 
     public function getFileContent(string $fileId): string
     {
-        $response = $this->service->files->get($fileId, ['alt' => 'media']);
+        $response = $this->service->files->get($fileId, [
+            'alt' => 'media',
+            'supportsAllDrives' => true,
+        ]);
         return $response->getBody()->getContents();
     }
 }

@@ -94,7 +94,9 @@ class GoogleDriveSyncServiceTest extends TestCase
         
         $mockFilesResource->shouldReceive('listFiles')->with(Mockery::on(function($args) {
             return str_contains($args['q'], "'folder-123' in parents") 
-                && str_contains($args['q'], "trashed = false");
+                && str_contains($args['q'], "trashed = false")
+                && ($args['supportsAllDrives'] ?? false) === true
+                && ($args['includeItemsFromAllDrives'] ?? false) === true;
         }))->andReturn($mockFileList);
 
         $mockClient = Mockery::mock(Client::class);
@@ -125,8 +127,10 @@ class GoogleDriveSyncServiceTest extends TestCase
         $mockStream->shouldReceive('getContents')->andReturn('# Test Content');
         $mockResponse->shouldReceive('getBody')->andReturn($mockStream);
         
-        $mockFilesResource->shouldReceive('get')->with('file-123', ['alt' => 'media'])
-            ->andReturn($mockResponse);
+        $mockFilesResource->shouldReceive('get')->with('file-123', [
+            'alt' => 'media',
+            'supportsAllDrives' => true,
+        ])->andReturn($mockResponse);
 
         $mockClient = Mockery::mock(Client::class);
         $mockClient->shouldReceive('getScopes')->andReturn(['https://www.googleapis.com/auth/drive.readonly']);
