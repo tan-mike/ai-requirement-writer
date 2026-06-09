@@ -28,13 +28,29 @@ class GoogleDriveSyncService
             $client->refreshToken($config['refresh_token']);
         } else {
             $auth = $config['service_account_json'];
-            Log::debug($auth);
-            if (is_string($auth) && file_exists($auth)) {
-                $client->setAuthConfig($auth);
-            } elseif (is_string($auth)) {
-                $client->setAuthConfig(json_decode($auth, true));
+            $authConfig = null;
+            if (is_string($auth)) {
+                if (file_exists($auth)) {
+                    $json = file_get_contents($auth);
+                    $authConfig = json_decode($json, true);
+                } else {
+                    $authConfig = json_decode($auth, true);
+                }
+            } elseif (is_array($auth)) {
+                $authConfig = $auth;
+            }
+            if (is_array($authConfig) && isset($authConfig['private_key'])) {
+                $authConfig['private_key'] = trim($authConfig['private_key'], "\"'");
+                $authConfig['private_key'] = str_replace('\\n', "\n", $authConfig['private_key']);
+                $client->setAuthConfig($authConfig);
             } else {
-                $client->setAuthConfig($auth);
+                if (is_string($auth) && file_exists($auth)) {
+                    $client->setAuthConfig($auth);
+                } elseif (is_string($auth)) {
+                    $client->setAuthConfig(json_decode($auth, true));
+                } else {
+                    $client->setAuthConfig($auth);
+                }
             }
         }
 
