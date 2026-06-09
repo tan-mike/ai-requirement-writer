@@ -84,13 +84,15 @@ class GoogleDriveSyncService
 
     public function listFiles(string $folderId): array
     {
-        $query = "'$folderId' in parents and mimeType = 'text/markdown' and trashed = false";
+        $query = "'$folderId' in parents and trashed = false";
         $results = $this->service->files->listFiles([
             'q' => $query,
             'fields' => 'files(id, name, modifiedTime)'
         ]);
 
-        return $results->getFiles();
+        return array_filter($results->getFiles(), function ($file) {
+            return str_ends_with(strtolower($file->name), '.md');
+        });
     }
 
     public function getFileContent(string $fileId): string

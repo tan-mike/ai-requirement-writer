@@ -86,6 +86,7 @@ class GoogleDriveSyncServiceTest extends TestCase
         $mockFileList = Mockery::mock(FileList::class);
         $mockFile = Mockery::mock(DriveFile::class);
 
+        $mockFile->name = 'test.md';
         $mockFile->shouldReceive('getId')->andReturn('file-123');
         $mockFile->shouldReceive('getName')->andReturn('test.md');
         
@@ -93,7 +94,7 @@ class GoogleDriveSyncServiceTest extends TestCase
         
         $mockFilesResource->shouldReceive('listFiles')->with(Mockery::on(function($args) {
             return str_contains($args['q'], "'folder-123' in parents") 
-                && str_contains($args['q'], "mimeType = 'text/markdown'");
+                && str_contains($args['q'], "trashed = false");
         }))->andReturn($mockFileList);
 
         $mockClient = Mockery::mock(Client::class);
@@ -109,6 +110,8 @@ class GoogleDriveSyncServiceTest extends TestCase
         
         $this->assertIsArray($files);
         $this->assertCount(1, $files);
+        // array_filter might preserve indices, so we use array_values to get the first element reliably
+        $files = array_values($files);
         $this->assertEquals('file-123', $files[0]->getId());
     }
 
