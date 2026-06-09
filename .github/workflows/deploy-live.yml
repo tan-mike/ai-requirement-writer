@@ -37,6 +37,14 @@ jobs:
       app-env: "production"
       tags: "latest"
 
+  deploy-to-ec2-dev:
+    needs: call-ecr-workflow
+    uses: ./.github/workflows/deploy-ec2.yml
+    with:
+      host: ${{ secrets.EC2_HOST }}
+      user: ${{ secrets.EC2_USER }}
+      ssh-key: ${{ secrets.EC2_SSH_KEY }}
+
   # deploy-to-ecs-uat:
   #   needs: [call-ecr-workflow, set-env]
   #   uses: ./.github/workflows/deploy-ecs.yml
