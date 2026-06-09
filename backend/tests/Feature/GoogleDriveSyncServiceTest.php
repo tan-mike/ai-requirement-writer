@@ -42,6 +42,42 @@ class GoogleDriveSyncServiceTest extends TestCase
         $this->assertInstanceOf(GoogleDriveSyncService::class, $service);
     }
 
+    public function test_it_initializes_with_split_private_key()
+    {
+        $mangledConfig = [
+            'type' => 'service_account',
+            'project_id' => 'test-project',
+            'private_key_id' => '123',
+            'private_key' => '"-----BEGIN PRIVATE KEY-----',
+            'line1' => '',
+            'line2' => '',
+            '-----END PRIVATE KEY-----"' => '',
+            'client_email' => 'test@example.com',
+            'client_id' => '456',
+            'auth_uri' => 'https://example.com/auth',
+            'token_uri' => 'https://example.com/token',
+            'auth_provider_x509_cert_url' => 'https://example.com/certs',
+            'client_x509_cert_url' => 'https://example.com/x509',
+        ];
+
+        Config::set('services.google.drive', [
+            'auth_method' => 'service_account',
+            'service_account_json' => json_encode($mangledConfig),
+        ]);
+
+        $service = new GoogleDriveSyncService();
+        $this->assertInstanceOf(GoogleDriveSyncService::class, $service);
+
+        $reflector = new \ReflectionClass($service);
+        $property = $reflector->getProperty('service');
+        $property->setAccessible(true);
+        $driveService = $property->getValue($service);
+        $client = $driveService->getClient();
+        $signingKey = $client->getConfig('signing_key');
+        
+        $this->assertEquals("-----BEGIN PRIVATE KEY-----\nline1\nline2\n-----END PRIVATE KEY-----", $signingKey);
+    }
+
     public function test_list_files_returns_array_of_files()
     {
         $mockClient = Mockery::mock(Client::class);

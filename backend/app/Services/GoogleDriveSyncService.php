@@ -40,6 +40,30 @@ class GoogleDriveSyncService
                 $authConfig = $auth;
             }
             if (is_array($authConfig) && isset($authConfig['private_key'])) {
+                // Reconstruct private key if it was split into array keys due to multiline parsing issues
+                $standardKeys = [
+                    'type', 'project_id', 'private_key_id', 'private_key',
+                    'client_email', 'client_id', 'auth_uri', 'token_uri',
+                    'auth_provider_x509_cert_url', 'client_x509_cert_url',
+                    'universe_domain'
+                ];
+
+                $pkLines = [$authConfig['private_key']];
+                foreach ($authConfig as $key => $value) {
+                    if (!in_array($key, $standardKeys)) {
+                        $pkLines[] = $key;
+                    }
+                }
+
+                if (count($pkLines) > 1) {
+                    $authConfig['private_key'] = implode("\n", $pkLines);
+                    foreach ($authConfig as $key => $value) {
+                        if (!in_array($key, $standardKeys)) {
+                            unset($authConfig[$key]);
+                        }
+                    }
+                }
+
                 $authConfig['private_key'] = trim($authConfig['private_key'], "\"'");
                 $authConfig['private_key'] = str_replace('\\n', "\n", $authConfig['private_key']);
                 $client->setAuthConfig($authConfig);
