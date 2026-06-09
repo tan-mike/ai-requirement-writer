@@ -5,6 +5,7 @@ namespace App\Services;
 use Google\Client;
 use Google\Service\Drive;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Log;
 
 class GoogleDriveSyncService
 {
@@ -26,6 +27,7 @@ class GoogleDriveSyncService
             $client->refreshToken($config['refresh_token']);
         } else {
             $auth = $config['service_account_json'];
+            Log::debug($auth);
             if (is_string($auth) && file_exists($auth)) {
                 $client->setAuthConfig($auth);
             } elseif (is_string($auth)) {
