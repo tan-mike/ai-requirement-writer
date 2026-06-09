@@ -6,10 +6,10 @@ on:
    workflow_call:
     inputs:
       host:
-        required: true
+        required: false
         type: string
       user:
-        required: true
+        required: false
         type: string
       ssh-key:
         required: false
