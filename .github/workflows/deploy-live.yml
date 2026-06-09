@@ -40,6 +40,7 @@ jobs:
   deploy-to-ec2-dev:
     needs: call-ecr-workflow
     uses: ./.github/workflows/deploy-ec2.yml
+    secrets: inherit
 
   # deploy-to-ecs-uat:
   #   needs: [call-ecr-workflow, set-env]

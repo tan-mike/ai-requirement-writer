@@ -3,6 +3,13 @@ name: 🌏 Deploy to DEV EC2
 on:
    workflow_dispatch:
    workflow_call:
+    secrets:    
+      EC2_HOST:
+        required: true
+      EC2_USER:
+        required: true
+      EC2_SSH_KEY:
+        required: true  
 
 jobs:
     deploy-to-ec2-dev:
