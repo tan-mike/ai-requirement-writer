@@ -84,15 +84,34 @@ class GoogleDriveSyncService
 
     public function listFiles(string $folderId): array
     {
+        Log::info("GoogleDriveSyncService: Listing files in folder ID: {$folderId}");
         $query = "'$folderId' in parents and trashed = false";
-        $results = $this->service->files->listFiles([
-            'q' => $query,
-            'fields' => 'files(id, name, modifiedTime)'
-        ]);
+        
+        try {
+            $results = $this->service->files->listFiles([
+                'q' => $query,
+                'fields' => 'files(id, name, modifiedTime)'
+            ]);
+            
+            $rawFiles = $results->getFiles();
+            Log::info("GoogleDriveSyncService: Found " . count($rawFiles) . " raw files in Google Drive.");
+            
+            foreach ($rawFiles as $file) {
+                Log::info("GoogleDriveSyncService: Raw file - ID: {$file->id}, Name: {$file->name}");
+            }
 
-        return array_filter($results->getFiles(), function ($file) {
-            return str_ends_with(strtolower($file->name), '.md');
-        });
+            $filtered = array_filter($rawFiles, function ($file) {
+                return str_ends_with(strtolower($file->name), '.md');
+            });
+
+            Log::info("GoogleDriveSyncService: Filtered to " . count($filtered) . " files ending in .md");
+            return $filtered;
+        } catch (\Exception $e) {
+            Log::error("GoogleDriveSyncService: Failed listing files from Google Drive. Error: " . $e->getMessage(), [
+                'exception' => $e
+            ]);
+            throw $e;
+        }
     }
 
     public function getFileContent(string $fileId): string
