@@ -32,4 +32,9 @@ php /var/www/html/backend/artisan migrate --force
 # Run seeders
 php /var/www/html/backend/artisan db:seed --force
 
+# Install crontab for Laravel scheduler (runs every minute, scheduler decides what to execute)
+# Export current env so cron jobs have access to all Docker env vars
+env | sed 's/=\(.*\)/="\1"/' > /etc/crontab.env
+echo "* * * * * . /etc/crontab.env; cd /var/www/html/backend && php artisan schedule:run >> /dev/null 2>&1" | crontab -
+
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf

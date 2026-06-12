@@ -7,3 +7,4 @@ frontend/.env.local
 *.pem
 .env
 .env.*
+.qoder

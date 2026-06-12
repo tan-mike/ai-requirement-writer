@@ -20,7 +20,7 @@ RUN composer install --no-dev --optimize-autoloader
 # Stage 3: Runtime
 FROM php:8.3-fpm-alpine
 # Install runtime dependencies and PDO MySQL
-RUN apk add --no-cache nginx supervisor nodejs
+RUN apk add --no-cache nginx supervisor nodejs dcron
 RUN docker-php-ext-install pdo_mysql
 # Create supervisor log directory
 RUN mkdir -p /var/log/supervisor
