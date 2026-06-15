@@ -1,6 +1,5 @@
 'use client'
 import { use, useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api'
@@ -14,7 +13,6 @@ interface Message {
 
 export default function ChatPage({ params }: { params: Promise<{ id: string, feature_id: string }> }) {
   const { id: projectId, feature_id: featureId } = use(params)
-  const router = useRouter()
   const { showAlert, showConfirm } = useNotifications()
   const [feature, setFeature] = useState<{ status: string, name: string, mode: string } | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -25,80 +23,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string, fea
   const [readyForBrd, setReadyForBrd] = useState(false)
   const [hasError, setHasError] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth' })
-    }
-  }, [messages, streamingContent])
-
-  useEffect(() => {
-    const fetchData = () => {
-      Promise.all([
-        apiClient.get<{ data: { status: string, name: string, mode: string } }>(`/features/${featureId}`),
-        apiClient.get<{ data: Message[] }>(`/features/${featureId}/messages`)
-      ]).then(([featRes, msgRes]) => {
-        setFeature(featRes.data)
-        setMessages(msgRes.data)
-        setLoading(false)
-        
-        if (msgRes.data.length === 0 && featRes.data.status !== 'completed') {
-          triggerInitialMessage()
-        }
-      })
-      .catch(err => {
-        console.error(err)
-        setLoading(false)
-      })
-    }
-
-    fetchData()
-  }, [featureId])
-
-  const [started, setStarted] = useState(false)
-
-  async function triggerInitialMessage() {
-    if (started) return
-    setStarted(true)
-    await handleSendInternal("Hello! I'm ready to start the discovery interview.")
-  }
-
-  async function handleRetry() {
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content
-    if (!lastUserMsg) return
-    setHasError(false)
-    await handleSendInternal(lastUserMsg, true)
-  }
-
-  async function handleRestart() {
-    showConfirm(
-      'Restart Interview',
-      'Are you sure you want to restart? This will clear the entire conversation history.',
-      async () => {
-        setLoading(true)
-        try {
-          await apiClient.delete(`/features/${featureId}/messages`)
-          setMessages([])
-          setReadyForBrd(false)
-          setStarted(false)
-          triggerInitialMessage()
-        } catch (err) {
-          console.error(err)
-          showAlert('Restart Error', 'Failed to restart interview')
-        } finally {
-          setLoading(false)
-        }
-      }
-    )
-  }
-
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault()
-    if (!input.trim() || sending) return
-    const msg = input
-    setInput('')
-    await handleSendInternal(msg)
-  }
+  const startedRef = useRef(false)
 
   async function handleSendInternal(userMsg: string, isResume = false) {
     setSending(true)
@@ -176,6 +101,79 @@ export default function ChatPage({ params }: { params: Promise<{ id: string, fea
       setHasError(true)
     }
   }
+
+  async function triggerInitialMessage() {
+    if (startedRef.current) return
+    startedRef.current = true
+    await handleSendInternal("Hello! I'm ready to start the discovery interview.")
+  }
+
+  async function handleRetry() {
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content
+    if (!lastUserMsg) return
+    setHasError(false)
+    await handleSendInternal(lastUserMsg, true)
+  }
+
+  async function handleRestart() {
+    showConfirm(
+      'Restart Interview',
+      'Are you sure you want to restart? This will clear the entire conversation history.',
+      async () => {
+        setLoading(true)
+        try {
+          await apiClient.delete(`/features/${featureId}/messages`)
+          setMessages([])
+          setReadyForBrd(false)
+          startedRef.current = false
+          triggerInitialMessage()
+        } catch (err) {
+          console.error(err)
+          showAlert('Restart Error', 'Failed to restart interview')
+        } finally {
+          setLoading(false)
+        }
+      }
+    )
+  }
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault()
+    if (!input.trim() || sending) return
+    const msg = input
+    setInput('')
+    await handleSendInternal(msg)
+  }
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages, streamingContent])
+
+  useEffect(() => {
+    const fetchData = () => {
+      Promise.all([
+        apiClient.get<{ data: { status: string, name: string, mode: string } }>(`/features/${featureId}`),
+        apiClient.get<{ data: Message[] }>(`/features/${featureId}/messages`)
+      ]).then(([featRes, msgRes]) => {
+        setFeature(featRes.data)
+        setMessages(msgRes.data)
+        setLoading(false)
+        
+        if (msgRes.data.length === 0 && featRes.data.status !== 'completed') {
+          triggerInitialMessage()
+        }
+      })
+      .catch(err => {
+        console.error(err)
+        setLoading(false)
+      })
+    }
+
+    fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [featureId])
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-20 text-muted">
