@@ -35,7 +35,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string, fea
     }
 
     const token = localStorage.getItem('token')
-    const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api'
+    const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api'
 
     try {
       const res = await fetch(`${BASE_URL}/features/${featureId}/chat`, {

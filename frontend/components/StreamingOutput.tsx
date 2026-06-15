@@ -25,7 +25,7 @@ export default function StreamingOutput({ projectId, endpoint, body, onComplete,
     accumulatedRef.current = ''
     setLastStatus(undefined)
 
-    const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api'
+    const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api'
 
     fetch(`${BASE_URL}${endpoint}`, {
       method: 'POST',
