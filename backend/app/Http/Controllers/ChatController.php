@@ -41,7 +41,12 @@ class ChatController extends Controller
         ]);
 
         set_time_limit(0);
-        $this->gemini->forUser($user)->forFeature($feature);
+
+        try {
+            $this->gemini->forUser($user)->forFeature($feature);
+        } catch (\RuntimeException $e) {
+            abort(422, $e->getMessage());
+        }
 
         $leadPersona = $feature->leadPersona;
         if (!$leadPersona) {

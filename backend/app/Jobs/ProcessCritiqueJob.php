@@ -26,7 +26,14 @@ class ProcessCritiqueJob implements ShouldQueue
         set_time_limit(0); // Prevent premature killing
 
         $feature = $this->draft->feature;
-        $gemini->forUser($this->draft->user, $feature->project)->forFeature($feature);
+
+        try {
+            $gemini->forUser($this->draft->user, $feature->project)->forFeature($feature);
+        } catch (\RuntimeException $e) {
+            // No API key — fail immediately without retrying
+            $this->fail($e);
+            return;
+        }
 
         $critiqueContent = $gemini->generateCritique(
             $this->reviewer->system_prompt,

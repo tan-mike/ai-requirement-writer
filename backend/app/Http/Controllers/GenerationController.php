@@ -45,9 +45,13 @@ class GenerationController extends Controller
             'description' => ['nullable', 'string'],
         ]);
 
-        set_time_limit(0);
+        try {
+            $this->gemini->forUser($request->user())->forFeature($feature);
+        } catch (\RuntimeException $e) {
+            abort(422, $e->getMessage());
+        }
 
-        $this->gemini->forUser($request->user())->forFeature($feature);
+        set_time_limit(0);
 
         $leadPersona = $feature->leadPersona;
         if (!$leadPersona) {
@@ -157,7 +161,12 @@ class GenerationController extends Controller
         }
 
         set_time_limit(0);
-        $this->gemini->forUser($request->user())->forFeature($feature);
+
+        try {
+            $this->gemini->forUser($request->user())->forFeature($feature);
+        } catch (\RuntimeException $e) {
+            abort(422, $e->getMessage());
+        }
         
         $leadPersona = $draft->leadPersona;
 

@@ -37,20 +37,23 @@ class GeminiGenerationService
         $this->customClient = null;
         $this->effectiveFreeTier = (bool) config('gemini.platform_free_tier', false);
 
-        if ($user) {
-            if ($user->gemini_api_key) {
-                // Initialize custom client with user's personal key
-                $this->customClient = \Gemini::factory()
-                    ->withApiKey($user->gemini_api_key)
-                    ->withHttpHeader('Accept', 'application/json')
-                    ->make();
-                
-                // Use user's personal free-tier setting for their own key
-                $this->effectiveFreeTier = (bool) $user->free_tier;
-            } else {
-                // Use platform key with platform free-tier setting
-                $this->effectiveFreeTier = (bool) config('gemini.platform_free_tier', false);
-            }
+        if ($user && $user->gemini_api_key) {
+            // Initialize custom client with user's personal key
+            $this->customClient = \Gemini::factory()
+                ->withApiKey($user->gemini_api_key)
+                ->withHttpHeader('Accept', 'application/json')
+                ->make();
+            
+            // Use user's personal free-tier setting for their own key
+            $this->effectiveFreeTier = (bool) $user->free_tier;
+        } elseif (!config('gemini.api_key')) {
+            // No user key and no platform key configured
+            throw new \RuntimeException(
+                'No Gemini API key configured. Please set your personal API key in Settings, or ask your administrator to configure the platform key.'
+            );
+        } else {
+            // Use platform key with platform free-tier setting
+            $this->effectiveFreeTier = (bool) config('gemini.platform_free_tier', false);
         }
 
         return $this;

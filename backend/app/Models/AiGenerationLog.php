@@ -10,14 +10,27 @@ class AiGenerationLog extends Model
 {
     use HasFactory;
 
+    public $timestamps = false;
+
     protected $fillable = [
-        'feature_id',
         'user_id',
+        'feature_id',
         'type',
-        'prompt',
-        'response',
-        'tokens_used',
         'model',
+        'system_prompt',
+        'input_prompt',
+        'output_text',
+        'input_tokens',
+        'output_tokens',
+        'total_tokens',
+        'execution_time_ms',
+        'status',
+        'error_message',
+        'metadata',
+    ];
+
+    protected $casts = [
+        'metadata' => 'array',
     ];
 
     public function feature(): BelongsTo
