@@ -26,7 +26,7 @@ export function ProjectCard({ project }: { project: Project }) {
     >
       <div className="flex items-start justify-between mb-2">
         <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{project.name}</h3>
-        {project.is_curated ? (
+        {/* {project.is_curated ? (
           <span className="text-xs px-2 py-1 rounded-full font-semibold uppercase tracking-wider bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
             Curated
           </span>
@@ -34,7 +34,7 @@ export function ProjectCard({ project }: { project: Project }) {
           <span className={`text-xs px-2 py-1 rounded-full font-semibold uppercase tracking-wider ${statusColors[project.status] ?? 'bg-muted/10 text-muted'}`}>
             {project.status.replace('_', ' ')}
           </span>
-        )}
+        )} */}
       </div>
       
       {project.description && (
