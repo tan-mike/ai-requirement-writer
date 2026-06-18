@@ -51,9 +51,9 @@ export default function AdminSettingsPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-surface">
           <div>
-            <h3 className="font-medium text-foreground">Disable User Project Creation</h3>
+            <h3 className="font-medium text-foreground">Disable User Product Creation</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              If enabled, regular users cannot create their own projects. They can only create requirements inside Curated Projects.
+              If enabled, regular users cannot create their own products. They can only create requirements inside existing products.
             </p>
           </div>
           <button 

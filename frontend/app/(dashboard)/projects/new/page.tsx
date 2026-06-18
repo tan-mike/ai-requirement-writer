@@ -86,7 +86,7 @@ export default function NewProjectPage() {
 
       <div className="card p-10">
         <div className="mb-10 text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Start new project</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Create New Product</h1>
           <p className="text-muted-foreground mt-2">Create a container to manage your product requirements and features.</p>
         </div>
 
@@ -99,7 +99,7 @@ export default function NewProjectPage() {
         <form onSubmit={handleSubmit} className="space-y-8">
           <div className="space-y-6">
             <div className="space-y-1">
-              <label htmlFor="project-name" className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Project Name</label>
+              <label htmlFor="project-name" className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Product Name</label>
               <input id="project-name" type="text" value={name} onChange={e => setName(e.target.value)}
                 placeholder="e.g. Customer Portal" className="input text-base" required />
             </div>
@@ -107,7 +107,7 @@ export default function NewProjectPage() {
             <div className="space-y-1">
               <label htmlFor="project-description" className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5 block">Description (Optional)</label>
               <textarea id="project-description" value={description} onChange={e => setDescription(e.target.value)}
-                placeholder="What is this project about?" className="w-full bg-surface border-2 border-border rounded-xl px-4 py-3 text-sm focus:border-primary transition-all outline-none" rows={3} />
+                placeholder="What is this product about?" className="w-full bg-surface border-2 border-border rounded-xl px-4 py-3 text-sm focus:border-primary transition-all outline-none" rows={3} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -163,7 +163,7 @@ export default function NewProjectPage() {
           </div>
 
           <div className="pt-6 border-t border-border space-y-6">
-            <h3 className="text-sm font-bold uppercase tracking-widest text-foreground">Project Context (Optional)</h3>
+            <h3 className="text-sm font-bold uppercase tracking-widest text-foreground">Product Context (Optional)</h3>
             <div className="grid gap-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                 {savedContexts.length > 0 ? savedContexts.map(ctx => (
                     <label key={ctx.id} className="flex items-center gap-3 p-4 rounded-xl border border-border bg-surface hover:bg-surface-hover cursor-pointer transition-all group">
@@ -184,14 +184,14 @@ export default function NewProjectPage() {
                 )}
             </div>
             <p className="text-[10px] text-muted-foreground italic leading-relaxed">
-                Select baseline documentation or specifications that should apply to all features in this project.
+                Select baseline documentation or specifications that should apply to all features in this product.
             </p>
           </div>
 
           <div className="pt-6">
             <button type="submit" disabled={submitting}
               className="btn-primary w-full py-4 text-base shadow-lg shadow-primary/20">
-              {submitting ? 'Creating container...' : 'Create project'}
+              {submitting ? 'Creating container...' : 'Create product'}
             </button>
           </div>
         </form>

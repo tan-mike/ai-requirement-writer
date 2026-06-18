@@ -55,7 +55,7 @@ class GenerationController extends Controller
 
         $leadPersona = $feature->leadPersona;
         if (!$leadPersona) {
-             $leadPersona = Persona::where('slug', 'lead_general_pm')->first() ?? Persona::where('role', 'lead')->first();
+             $leadPersona = Persona::where('slug', 'lead_general_ba')->first() ?? Persona::where('role', 'lead')->first();
         }
 
         $reviewers = Persona::whereIn('id', $request->reviewer_persona_ids ?? [])->get();

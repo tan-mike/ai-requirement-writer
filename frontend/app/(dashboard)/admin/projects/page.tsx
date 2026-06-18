@@ -55,14 +55,14 @@ export default function AdminProjectsPage() {
     }
   }
 
-  if (loading) return <div>Loading projects...</div>
+  if (loading) return <div>Loading products...</div>
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Projects</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage public template projects</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Products</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage public template products</p>
         </div>
       </div>
 
@@ -72,7 +72,7 @@ export default function AdminProjectsPage() {
             <tr>
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Category</th>
-              <th className="px-4 py-3 font-medium">Curated</th>
+              <th className="px-4 py-3 font-medium">Default</th>
               <th className="px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
@@ -120,7 +120,7 @@ export default function AdminProjectsPage() {
             ))}
             {projects.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No projects found.</td>
+                <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No products found.</td>
               </tr>
             )}
           </tbody>

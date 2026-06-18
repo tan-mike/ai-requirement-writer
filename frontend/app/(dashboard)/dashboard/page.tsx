@@ -52,10 +52,10 @@ export default function DashboardPage() {
           <div className="w-16 h-16 bg-surface-hover rounded-full flex items-center justify-center mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M8 7h6"/><path d="M8 11h8"/></svg>
           </div>
-          <h2 className="text-xl font-semibold text-foreground">No projects yet</h2>
-          <p className="text-muted-foreground mt-2 max-w-xs mx-auto">Create your first project to start generating high-quality requirements.</p>
+          <h2 className="text-xl font-semibold text-foreground">No products yet</h2>
+          <p className="text-muted-foreground mt-2 max-w-xs mx-auto">Create your first product to start generating high-quality requirements.</p>
           {canCreate && (
-            <Link href="/projects/new" className="btn-primary mt-6">Create first project</Link>
+            <Link href="/projects/new" className="btn-primary mt-6">Create first product</Link>
           )}
         </div>
       )}
@@ -71,7 +71,7 @@ export default function DashboardPage() {
 
       {!loading && myProjects.length > 0 && (
         <div className="mb-12">
-          <h2 className="text-lg font-bold text-foreground mb-4">My Projects</h2>
+          <h2 className="text-lg font-bold text-foreground mb-4">My Products</h2>
           <div className="grid gap-6 md:grid-cols-2">
             {myProjects.map(p => <ProjectCard key={p.id} project={p} />)}
           </div>
@@ -88,12 +88,12 @@ export default function DashboardPage() {
         steps={[
           {
             targetId: "tour-new-project-btn",
-            title: "Start a Project",
+            title: "Start a Product",
             content: "Click here to start discovering and generating high-quality requirements for your next feature."
           },
           {
             targetId: "tour-contexts-section",
-            title: "Project Contexts",
+            title: "Product Contexts",
             content: "Manage reusable documentation and architecture files. These help the AI understand your existing systems."
           }
         ]} 
