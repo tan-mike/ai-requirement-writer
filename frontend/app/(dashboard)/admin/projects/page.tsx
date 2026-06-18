@@ -61,7 +61,7 @@ export default function AdminProjectsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Curated Projects</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Projects</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage public template projects</p>
         </div>
       </div>

@@ -29,7 +29,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 : 'text-muted hover:bg-surface-hover hover:text-foreground'
             }`}
           >
-            Curated Projects
+            Products
           </Link>
           <Link 
             href="/admin/settings" 

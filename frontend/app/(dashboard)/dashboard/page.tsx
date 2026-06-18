@@ -29,12 +29,12 @@ export default function DashboardPage() {
     <div>
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Projects</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Products</h1>
           <p className="text-muted-foreground mt-1">Manage and view your requirement generation projects.</p>
         </div>
         {canCreate && (
           <Link href="/projects/new" id="tour-new-project-btn" className="btn-primary flex items-center gap-2">
-            <span>New project</span>
+            <span>New Product</span>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
           </Link>
         )}
@@ -43,7 +43,7 @@ export default function DashboardPage() {
       {loading && (
         <div className="flex flex-col items-center justify-center py-20 text-muted">
           <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="font-medium">Loading projects...</p>
+          <p className="font-medium">Loading products...</p>
         </div>
       )}
       
@@ -62,7 +62,7 @@ export default function DashboardPage() {
       
       {!loading && curatedProjects.length > 0 && (
         <div className="mb-12">
-          <h2 className="text-lg font-bold text-foreground mb-4">Curated Templates</h2>
+          <h2 className="text-lg font-bold text-foreground mb-4">Products</h2>
           <div className="grid gap-6 md:grid-cols-2">
             {curatedProjects.map(p => <ProjectCard key={p.id} project={p} />)}
           </div>

@@ -36,7 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       : 'text-muted hover:text-foreground hover:bg-surface-hover'
                   }`}
                 >
-                  Projects
+                  Products
                 </Link>
                 <Link 
                   href="/settings" 
