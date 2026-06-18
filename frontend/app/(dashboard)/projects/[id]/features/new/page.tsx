@@ -17,7 +17,7 @@ export default function NewFeaturePage({ params }: { params: Promise<{ id: strin
   const [description, setDescription] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
   const [selectedPersonaId, setSelectedPersonaId] = useState<number>(0)
-  const [mode, setMode] = useState<'template' | 'conversational'>('template')
+  const [mode, setMode] = useState<'template' | 'conversational'>('conversational')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
