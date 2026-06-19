@@ -29,7 +29,7 @@ sed -i "s/numprocs=1/numprocs=$WORKER_COUNT/" /etc/supervisor/conf.d/supervisord
 php /var/www/html/backend/artisan migrate --force
 
 
-# Run seeders
+# Run seeders (idempotent — uses firstOrCreate to preserve user customizations)
 php /var/www/html/backend/artisan db:seed --force
 
 # Install crontab for Laravel scheduler (runs every minute, scheduler decides what to execute)

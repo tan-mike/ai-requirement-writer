@@ -62,7 +62,7 @@ class PersonaSeeder extends Seeder
         ];
 
         foreach ($personas as $persona) {
-            Persona::updateOrCreate(['slug' => $persona['slug']], $persona);
+            Persona::firstOrCreate(['slug' => $persona['slug']], $persona);
         }
     }
 }

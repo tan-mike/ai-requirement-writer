@@ -14,6 +14,11 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call([TemplateSeeder::class, PersonaSeeder::class]);
+        $this->call([TemplateSeeder::class]);
+
+        // Personas are dev/local-only seed data - skip in production/staging
+        if (app()->environment('local')) {
+            $this->call([PersonaSeeder::class]);
+        }
     }
 }

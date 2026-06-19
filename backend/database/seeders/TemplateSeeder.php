@@ -79,7 +79,7 @@ class TemplateSeeder extends Seeder
         ];
 
         foreach ($templates as $template) {
-            Template::updateOrCreate(['type' => $template['type']], $template);
+            Template::firstOrCreate(['type' => $template['type']], $template);
         }
     }
 }
