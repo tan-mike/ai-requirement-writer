@@ -129,10 +129,9 @@ class GenerationController extends Controller
                     }
                     echo 'data: ' . json_encode(['status' => 'reviewing']) . "\n\n";
                 } else {
-                    app(\App\Services\GraphOrchestratorService::class)->transition($feature, 'approved', [
-                        'active_draft_id' => $draft->id
-                    ]);
-                    echo 'data: ' . json_encode(['status' => 'approved']) . "\n\n";
+                    // No reviewers selected: leave draft in 'drafting' state so the user
+                    // can manually review, edit, and approve via the DraftEditor UI.
+                    echo 'data: ' . json_encode(['status' => 'drafting']) . "\n\n";
                 }
 
                 echo "data: [DONE]\n\n";
@@ -192,14 +191,13 @@ class GenerationController extends Controller
                 );
 
                 $draft->update([
-                    'content' => $accumulated
+                    'content' => $accumulated,
+                    'status' => 'drafting',
                 ]);
 
-                app(\App\Services\GraphOrchestratorService::class)->transition($feature, 'approved', [
-                    'active_draft_id' => $draft->id
-                ]);
-
-                echo 'data: ' . json_encode(['status' => 'approved']) . "\n\n";
+                // Leave draft in 'drafting' so user can review synthesized output,
+                // make final edits, and manually approve when ready.
+                echo 'data: ' . json_encode(['status' => 'drafting']) . "\n\n";
                 echo "data: [DONE]\n\n";
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::error('Synthesis failed: ' . $e->getMessage());

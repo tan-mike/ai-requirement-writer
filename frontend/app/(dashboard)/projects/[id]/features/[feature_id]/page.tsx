@@ -316,7 +316,7 @@ export default function FeatureViewPage({ params }: { params: Promise<{ id: stri
                         onClick={() => setSynthesizing(draft.id)}
                         className="bg-indigo-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-indigo-700 shadow-sm transition-all active:scale-95"
                       >
-                        Synthesize & Finalize
+                        Synthesize Feedback
                       </button>
                     </div>
                   )}
