@@ -567,7 +567,7 @@ class GeminiGenerationService
             return "";
         }
 
-        $contexts = $this->currentProject->projectContexts()->where('is_global', false)->get();
+        $contexts = $this->currentProject->projectContexts()->get();
         if ($contexts->isEmpty()) {
             return "";
         }
