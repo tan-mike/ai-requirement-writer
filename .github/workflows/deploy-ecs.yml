@@ -1,0 +1,85 @@
+name: 🚀 Reusable - Deploy to ECS (OIDC)
+
+on:
+  workflow_call:
+    inputs:
+      aws-region:
+        required: true
+        type: string
+        description: "AWS Region"
+      role-to-assume:
+        required: true
+        type: string
+        description: "AWS IAM Role to assume via OIDC"
+      ecs-cluster:
+        required: true
+        type: string
+        description: "ECS Cluster Name"
+      ecs-service:
+        required: true
+        type: string
+        description: "ECS Service Name"
+      task-definition-family:
+        required: true
+        type: string
+        description: "ECS Task Definition Family Name"
+      container-name:
+        required: true
+        type: string
+        description: "Container name in the ECS task definition"
+      image:
+        required: true
+        type: string
+        description: "Docker image URI to deploy"
+
+permissions:
+  id-token: write     # 🔐 Required for OIDC
+  contents: read      # 📥 Required for checkout
+
+jobs:
+  deploy-to-ecs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔐 Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.role-to-assume }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: 📥 Download current Amazon ECS task definition
+        id: download-task-def
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ inputs.task-definition-family }} \
+            --query taskDefinition > task-definition.json
+          
+          # Capture the ARN of the revision we are about to replace
+          OLD_TASK_DEF_ARN=$(aws ecs describe-task-definition \
+            --task-definition ${{ inputs.task-definition-family }} \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "old_task_def_arn=$OLD_TASK_DEF_ARN" >> $GITHUB_OUTPUT
+
+      - name: 📝 Update Amazon ECS task definition with new image
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ inputs.container-name }}
+          image: ${{ inputs.image }}
+
+      - name: 🚀 Deploy to Amazon ECS
+        id: deploy
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ inputs.ecs-service }}
+          cluster: ${{ inputs.ecs-cluster }}
+          wait-for-service-stability: false
+
+      # - name: 🧹 Clean up - Deregister previous revision
+      #   if: success()
+      #   run: |
+      #     echo "Deregistering previous task definition: ${{ steps.download-task-def.outputs.old_task_def_arn }}"
+      #     aws ecs deregister-task-definition --task-definition ${{ steps.download-task-def.outputs.old_task_def_arn }}
+
+
