@@ -1,0 +1,66 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Git files
+.git
+.gitignore
+.gitattributes
+.github/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+
+# Node modules
+node_modules/
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Composer
+vendor/
+composer.lock
+
+# Laravel specific
+storage/logs/
+bootstrap/cache/
+.phpunit.result.cache
+phpstan.neon
+pint.json
+
+# Build/dist files
+dist/
+build/
+*.min.js
+*.min.css
+
+# Testing
+tests/
+phpunit.xml
+coverage/
+.coverage
+
+# Documentation
+README.md
+docs/
+
+# CI/CD
+.gitlab-ci.yml
+.github/
+.circleci/
+
+# Misc files
+Makefile
+convert.js
+*.md
+.dockerignore
+Dockerfile
+docker-compose.yaml
