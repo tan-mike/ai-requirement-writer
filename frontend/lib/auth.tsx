@@ -9,6 +9,7 @@ interface User {
   email: string
   role: string
   current_team_id: number | null
+  email_verified_at: string | null
 }
 
 interface AuthContextType {
@@ -16,10 +17,12 @@ interface AuthContextType {
   token: string | null
   settings: { creation_disabled: boolean } | null
   login: (email: string, password: string) => Promise<void>
-  register: (name: string, email: string, password: string) => Promise<void>
+  register: (name: string, email: string, password: string) => Promise<string>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
   switchTeam: (teamId: number | null) => Promise<void>
+  resendVerification: (email: string) => Promise<void>
+  verifyEmail: (id: string, hash: string, expires: string, signature: string) => Promise<void>
   loading: boolean
 }
 
@@ -57,29 +60,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function login(email: string, password: string) {
-    const res = await apiClient.post<{ data: { user: User; token: string } }>(
-      '/auth/login',
-      { email, password }
-    )
-    localStorage.setItem('token', res.data.token)
-    localStorage.setItem('user', JSON.stringify(res.data.user))
-    setToken(res.data.token)
-    setUser(res.data.user)
-    // Refresh user after login to get settings
-    await refreshUser()
+    try {
+      const res = await apiClient.post<{ data: { user: User; token: string } }>(
+        '/auth/login',
+        { email, password }
+      )
+      localStorage.setItem('token', res.data.token)
+      localStorage.setItem('user', JSON.stringify(res.data.user))
+      setToken(res.data.token)
+      setUser(res.data.user)
+      // Refresh user after login to get settings
+      await refreshUser()
+    } catch (err: unknown) {
+      if (err instanceof Error && (err as Error & { status: number }).status === 409) {
+        sessionStorage.setItem('pending_email', email)
+        throw { needsVerification: true, email }
+      }
+      throw err
+    }
   }
 
-  async function register(name: string, email: string, password: string) {
-    const res = await apiClient.post<{ data: { user: User; token: string } }>(
+  async function register(name: string, email: string, password: string): Promise<string> {
+    const res = await apiClient.post<{ message: string }>(
       '/auth/register',
       { name, email, password, password_confirmation: password }
     )
-    localStorage.setItem('token', res.data.token)
-    localStorage.setItem('user', JSON.stringify(res.data.user))
-    setToken(res.data.token)
-    setUser(res.data.user)
-    // Refresh user after register to get settings
-    await refreshUser()
+    sessionStorage.setItem('pending_email', email)
+    return email
   }
 
   async function logout() {
@@ -114,8 +121,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.reload()
   }
 
+  async function resendVerification(email: string) {
+    await apiClient.post('/auth/email/resend', { email })
+  }
+
+  async function verifyEmail(id: string, hash: string, expires: string, signature: string) {
+    await apiClient.post('/auth/email/verify', { id, hash, expires, signature })
+  }
+
   return (
-    <AuthContext.Provider value={{ user, token, settings, login, register, logout, refreshUser, switchTeam, loading }}>
+    <AuthContext.Provider value={{ user, token, settings, login, register, logout, refreshUser, switchTeam, resendVerification, verifyEmail, loading }}>
       {children}
     </AuthContext.Provider>
   )
