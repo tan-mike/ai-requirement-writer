@@ -57,7 +57,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
         const firstError = Object.values(data.errors)[0]
         if (Array.isArray(firstError)) message = firstError[0]
       }
-      throw new Error(message)
+      const error = new Error(message) as Error & { status: number }
+      error.status = res.status
+      throw error
     }
     return data as T
   } finally {

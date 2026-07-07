@@ -22,6 +22,20 @@ class SettingController extends Controller
             'settings.*' => ['nullable', 'string'],
         ]);
 
+        // Validate allowed_domains format if present
+        if (isset($data['settings']['allowed_domains']) && !empty($data['settings']['allowed_domains'])) {
+            $domains = explode(',', $data['settings']['allowed_domains']);
+            foreach ($domains as $domain) {
+                $domain = trim($domain);
+                if (empty($domain)) {
+                    return response()->json(['message' => 'Domain list contains empty entries.', 'errors' => ['allowed_domains' => ['Domain list contains empty entries. Remove extra commas.']]], 422);
+                }
+                if (str_contains($domain, '*') || str_contains($domain, ' ')) {
+                    return response()->json(['message' => "Invalid domain: '{$domain}'. No wildcards or spaces allowed.", 'errors' => ['allowed_domains' => ["Invalid domain: '{$domain}'."]]], 422);
+                }
+            }
+        }
+
         foreach ($data['settings'] as $key => $value) {
             Setting::updateOrCreate(
                 ['key' => $key],

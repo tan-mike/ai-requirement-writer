@@ -1,17 +1,20 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth'
+import { Suspense } from 'react'
 
-export default function LoginPage() {
+function LoginForm() {
   const { login } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
+  const verified = searchParams.get('verified') === '1'
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -24,7 +27,11 @@ export default function LoginPage() {
     try {
       await login(email, password)
       router.push('/dashboard')
-    } catch (err) {
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'needsVerification' in err) {
+        router.push('/check-email')
+        return
+      }
       setErrors({ general: err instanceof Error ? err.message : 'Login failed' })
     } finally {
       setSubmitting(false)
@@ -41,6 +48,14 @@ export default function LoginPage() {
       {errors.general && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 mb-6">
           <p className="text-red-700 dark:text-red-400 text-sm font-medium">{errors.general}</p>
+        </div>
+      )}
+
+      {verified && (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-3 mb-6">
+          <p className="text-green-700 dark:text-green-400 text-sm font-medium">
+            Email verified successfully! You can now sign in.
+          </p>
         </div>
       )}
       
@@ -84,5 +99,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   )
 }

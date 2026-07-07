@@ -12,10 +12,22 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
-    Route::middleware('auth:sanctum')->post('/logout', [AuthController::class, 'logout']);
+
+    // Email verification (public, rate-limited)
+    Route::post('/email/verify', [AuthController::class, 'verifyEmail'])
+        ->middleware('throttle:5,1')
+        ->name('verification.verify');
+    Route::post('/email/resend', [AuthController::class, 'resendVerification'])
+        ->middleware('throttle:3,1');
 });
 
+// Auth routes that need auth:sanctum but NOT verified middleware
 Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::put('/auth/email/change', [AuthController::class, 'changeEmail']);
+});
+
+Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/templates', [TemplateController::class, 'index']);
     
     // Projects

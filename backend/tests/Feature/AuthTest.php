@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -12,6 +13,8 @@ class AuthTest extends TestCase
 
     public function test_user_can_register(): void
     {
+        Notification::fake();
+
         $response = $this->postJson('/api/auth/register', [
             'name' => 'Edvin Test',
             'email' => 'edvin@test.com',
@@ -20,7 +23,7 @@ class AuthTest extends TestCase
         ]);
 
         $response->assertCreated()
-            ->assertJsonStructure(['data' => ['user' => ['id', 'name', 'email', 'role'], 'token']]);
+            ->assertJsonStructure(['message']);
 
         $this->assertDatabaseHas('users', ['email' => 'edvin@test.com']);
     }

@@ -64,6 +64,25 @@ export default function AdminSettingsPage() {
           </button>
         </div>
 
+        <div className="p-4 border border-border rounded-lg bg-surface space-y-3">
+          <div>
+            <h3 className="font-medium text-foreground">Allowed Email Domains</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Restrict registration to specific email domains. Leave empty to allow all domains.
+            </p>
+          </div>
+          <input
+            type="text"
+            value={settings.allowed_domains || ''}
+            onChange={e => setSettings({ ...settings, allowed_domains: e.target.value })}
+            placeholder="company.com, partner.org"
+            className="w-full px-3 py-2 border border-border rounded-md bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+          <p className="text-xs text-muted-foreground">
+            Enter domains separated by commas (e.g., company.com, partner.org). Users with emails not matching these domains cannot register.
+          </p>
+        </div>
+
         <button 
           onClick={saveSettings}
           disabled={saving}
