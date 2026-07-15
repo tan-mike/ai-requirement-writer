@@ -50,6 +50,7 @@ Schema::table('users', function (Blueprint $table) {
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=${APP_URL}/api/auth/google/callback
+GOOGLE_HD_DOMAIN=yourcompany.com
 ```
 
 ### Socialite Configuration
@@ -126,7 +127,7 @@ These routes are public (no `auth:sanctum` or `verified` middleware). Callback i
    - If found AND already has a different `google_id`: reject with error `"This Google account is linked to another user"`
    - If found AND has no `google_id` (or matching `google_id`): link `google_id`, ensure `email_verified_at` is set, return Sanctum token
    - If not found: create new user with `google_id`, `email_verified_at = now()`, default role `member`, `password = null`
-5. Render `google-callback.blade.php` with token + user data (or error)
+5. Render `google-callback.blade.php` with token + user data (or error). User object uses the existing `userShape()` format: `{ id, name, email, role, email_verified_at }`
 
 ### Callback Blade View (`google-callback.blade.php`)
 
