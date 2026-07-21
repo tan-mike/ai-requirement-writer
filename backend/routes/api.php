@@ -21,7 +21,9 @@ Route::prefix('auth')->group(function () {
         ->middleware('throttle:3,1');
 });
 
-Route::prefix('auth/google')->group(function () {
+// Google OAuth browser-flow routes need the session (web) middleware group —
+// Socialite stores the OAuth `state` parameter in the session for CSRF validation.
+Route::middleware('web')->prefix('auth/google')->group(function () {
     Route::get('/redirect', [\App\Http\Controllers\GoogleAuthController::class, 'redirect']);
     Route::get('/callback', [\App\Http\Controllers\GoogleAuthController::class, 'callback'])
         ->middleware('throttle:10,1');
