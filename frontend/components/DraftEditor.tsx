@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { apiClient } from '@/lib/api'
 
@@ -15,6 +15,16 @@ export default function DraftEditor({ featureId, draft, onApproved, readOnly = f
   const [saving, setSaving] = useState(false)
   const [approving, setApproving] = useState(false)
   const [error, setError] = useState('')
+
+  // Sync when draft content changes externally (e.g. after reprompt accept)
+  const lastSyncedContent = useRef(draft.content ?? '')
+  useEffect(() => {
+    const serverContent = draft.content ?? ''
+    if (serverContent !== lastSyncedContent.current) {
+      setContent(serverContent)
+      lastSyncedContent.current = serverContent
+    }
+  }, [draft.content])
 
   async function handleSave() {
     if (readOnly) return
