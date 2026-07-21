@@ -4,10 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Project;
 use App\Models\User;
-use App\Jobs\ProcessContextFileJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -15,46 +13,35 @@ class ContextFileUploadTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_context_file_is_processed_correctly()
+    public function test_user_can_create_project_with_repository_url()
     {
-        Storage::fake('local');
-        $user = User::factory()->create();
-        $project = Project::factory()->create(['user_id' => $user->id, 'status' => Project::STATUS_PROCESSING]);
-        
-        $content = "# Project Context\nThis is a test context.";
-        $file = UploadedFile::fake()->createWithContent('context.md', $content);
-        $path = $file->store('temp_context');
-
-        $job = new ProcessContextFileJob($project, $path);
-        $job->handle();
-
-        $project->refresh();
-        $this->assertEquals($content, $project->architecture_summary);
-        $this->assertEquals(Project::STATUS_READY, $project->status);
-        Storage::disk('local')->assertMissing($path);
-    }
-
-    public function test_user_can_create_project_with_context_file()
-    {
-        Storage::fake('local');
-        Queue::fake();
         config(['projects.creation_disabled' => false]);
         $user = User::factory()->create();
-        $persona = \App\Models\Persona::create(['slug' => 'test', 'name' => 'Test', 'role' => 'lead', 'system_prompt' => '...']);
         
         $response = $this->actingAs($user)->postJson('/api/projects', [
-            'name' => 'File Project',
+            'name' => 'Repo Project',
             'type' => 'webapp',
-            'context_file' => UploadedFile::fake()->create('context.md', 100),
-            'lead_persona_id' => $persona->id,
+            'repository_url' => 'https://github.com/example/repo',
         ]);
 
         $response->assertStatus(201);
         $project = Project::first();
-        $this->assertEquals('File Project', $project->name);
+        $this->assertEquals('Repo Project', $project->name);
+    }
+
+    public function test_user_can_create_project_without_repository()
+    {
+        config(['projects.creation_disabled' => false]);
+        $user = User::factory()->create();
         
-        Queue::assertPushed(ProcessContextFileJob::class, function ($job) use ($project) {
-            return $job->project->id === $project->id;
-        });
+        $response = $this->actingAs($user)->postJson('/api/projects', [
+            'name' => 'Simple Project',
+            'type' => 'webapp',
+        ]);
+
+        $response->assertStatus(201);
+        $project = Project::first();
+        $this->assertEquals('Simple Project', $project->name);
+        $this->assertEquals('ready', $project->status);
     }
 }

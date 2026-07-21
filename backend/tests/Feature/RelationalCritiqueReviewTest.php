@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\DraftCritique;
+use App\Models\Feature;
 use App\Models\Persona;
 use App\Models\Project;
 use App\Models\RequirementDraft;
@@ -17,6 +18,7 @@ class RelationalCritiqueReviewTest extends TestCase
 
     private User $user;
     private Project $project;
+    private Feature $feature;
     private Persona $leadPersona;
     private Persona $reviewerPersona;
 
@@ -38,6 +40,9 @@ class RelationalCritiqueReviewTest extends TestCase
         ]);
         $this->project = Project::factory()->create([
             'user_id' => $this->user->id,
+        ]);
+        $this->feature = Feature::factory()->create([
+            'project_id' => $this->project->id,
             'lead_persona_id' => $this->leadPersona->id,
         ]);
     }
@@ -45,7 +50,7 @@ class RelationalCritiqueReviewTest extends TestCase
     public function test_requirement_draft_api_eager_loads_critiques_and_persona(): void
     {
         $draft = RequirementDraft::create([
-            'project_id' => $this->project->id,
+            'feature_id' => $this->feature->id,
             'type' => 'brd',
             'content' => 'Draft content',
             'version' => 1,
@@ -60,7 +65,7 @@ class RelationalCritiqueReviewTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->user)
-            ->getJson("/api/projects/{$this->project->id}/drafts/{$draft->id}");
+            ->getJson("/api/features/{$this->feature->id}/drafts/{$draft->id}");
 
         $response->assertOk()
             ->assertJsonPath('data.critiques.0.content', 'Critique content')
@@ -70,7 +75,7 @@ class RelationalCritiqueReviewTest extends TestCase
     public function test_synthesize_uses_relational_critiques(): void
     {
         $draft = RequirementDraft::create([
-            'project_id' => $this->project->id,
+            'feature_id' => $this->feature->id,
             'type' => 'brd',
             'content' => 'Original content',
             'version' => 1,
@@ -87,9 +92,8 @@ class RelationalCritiqueReviewTest extends TestCase
 
         $mock = $this->mock(GeminiGenerationService::class);
         $mock->shouldReceive('forUser')->andReturnSelf();
+        $mock->shouldReceive('forFeature')->andReturnSelf();
         
-        // The core of Task 3 verification:
-        // streamSynthesis should receive an array with persona names as keys
         $mock->shouldReceive('streamSynthesis')
             ->with(
                 $this->leadPersona->system_prompt,
@@ -104,7 +108,7 @@ class RelationalCritiqueReviewTest extends TestCase
             });
 
         $response = $this->actingAs($this->user)
-            ->postJson("/api/projects/{$this->project->id}/drafts/{$draft->id}/synthesize");
+            ->postJson("/api/features/{$this->feature->id}/drafts/{$draft->id}/synthesize");
 
         $response->assertOk();
 
@@ -116,7 +120,7 @@ class RelationalCritiqueReviewTest extends TestCase
         $this->assertDatabaseHas('requirement_drafts', [
             'id' => $draft->id,
             'content' => 'Synthesized content',
-            'status' => 'approved',
+            'status' => 'drafting',
         ]);
     }
 }

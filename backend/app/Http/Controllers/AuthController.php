@@ -128,6 +128,12 @@ class AuthController extends Controller
 
         $user = $request->user();
 
+        if ($user->google_id) {
+            throw ValidationException::withMessages([
+                'email' => ['Cannot change email for accounts linked to Google SSO. Contact an administrator.'],
+            ]);
+        }
+
         if (!app(DomainValidationService::class)->isDomainAllowed($request->email)) {
             throw ValidationException::withMessages([
                 'email' => ['Email domain is not allowed.'],

@@ -23,6 +23,11 @@ interface AuthContextType {
   switchTeam: (teamId: number | null) => Promise<void>
   resendVerification: (email: string) => Promise<void>
   verifyEmail: (id: string, hash: string, expires: string, signature: string) => Promise<void>
+  loginWithGoogle: () => void
+  googleError: string | null
+  setGoogleError: (error: string | null) => void
+  setToken: (token: string | null) => void
+  setUser: (user: User | null) => void
   loading: boolean
 }
 
@@ -33,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null)
   const [settings, setSettings] = useState<{ creation_disabled: boolean } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [googleError, setGoogleError] = useState<string | null>(null)
 
   useEffect(() => {
     const safeParse = (val: string | null) => {
@@ -78,6 +84,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       throw err
     }
+  }
+
+  function loginWithGoogle() {
+    const authTab = window.open('/api/auth/google/redirect', '_blank')
+
+    if (!authTab) {
+      // Popup blocked — full page fallback
+      window.location.href = '/api/auth/google/redirect'
+      return
+    }
+
+    const handler = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return
+
+      window.removeEventListener('message', handler)
+      clearTimeout(timeoutId)
+
+      if (event.data.error) {
+        setGoogleError(event.data.error)
+        return
+      }
+
+      localStorage.setItem('token', event.data.token)
+      localStorage.setItem('user', JSON.stringify(event.data.user))
+      setToken(event.data.token)
+      setUser(event.data.user)
+      await refreshUser()
+      window.location.href = '/dashboard'
+    }
+
+    const timeoutId = setTimeout(() => {
+      window.removeEventListener('message', handler)
+    }, 5 * 60 * 1000)
+
+    window.addEventListener('message', handler)
   }
 
   async function register(name: string, email: string, password: string): Promise<string> {
@@ -130,7 +171,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, settings, login, register, logout, refreshUser, switchTeam, resendVerification, verifyEmail, loading }}>
+    <AuthContext.Provider value={{
+      user, token, settings,
+      login, register, logout, refreshUser, switchTeam,
+      resendVerification, verifyEmail,
+      loginWithGoogle, googleError, setGoogleError,
+      setToken, setUser,
+      loading
+    }}>
       {children}
     </AuthContext.Provider>
   )

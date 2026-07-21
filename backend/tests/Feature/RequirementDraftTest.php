@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Feature;
 use App\Models\Project;
 use App\Models\RequirementDraft;
 use App\Models\User;
@@ -13,17 +14,20 @@ class RequirementDraftTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+    private Feature $feature;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->user = User::factory()->create();
+        $project = Project::factory()->create(['user_id' => $this->user->id]);
+        $this->feature = Feature::factory()->create(['project_id' => $project->id]);
     }
 
-    private function createDraft(Project $project, array $attrs = []): RequirementDraft
+    private function createDraft(array $attrs = []): RequirementDraft
     {
         return RequirementDraft::create(array_merge([
-            'project_id' => $project->id,
+            'feature_id' => $this->feature->id,
             'type' => 'brd',
             'content' => 'Some content',
             'version' => 1,
@@ -33,23 +37,21 @@ class RequirementDraftTest extends TestCase
 
     public function test_user_can_list_drafts(): void
     {
-        $project = Project::factory()->create(['user_id' => $this->user->id]);
-        $this->createDraft($project, ['type' => 'brd']);
-        $this->createDraft($project, ['type' => 'stories', 'version' => 1]);
+        $this->createDraft(['type' => 'brd']);
+        $this->createDraft(['type' => 'stories', 'version' => 1]);
 
         $response = $this->actingAs($this->user)
-            ->getJson("/api/projects/{$project->id}/drafts");
+            ->getJson("/api/features/{$this->feature->id}/drafts");
 
         $response->assertOk()->assertJsonStructure(['data' => ['brd', 'stories']]);
     }
 
     public function test_user_can_update_draft_content(): void
     {
-        $project = Project::factory()->create(['user_id' => $this->user->id]);
-        $draft = $this->createDraft($project);
+        $draft = $this->createDraft();
 
         $response = $this->actingAs($this->user)
-            ->patchJson("/api/projects/{$project->id}/drafts/{$draft->id}", [
+            ->patchJson("/api/features/{$this->feature->id}/drafts/{$draft->id}", [
                 'content' => 'Updated content',
             ]);
 
@@ -59,33 +61,39 @@ class RequirementDraftTest extends TestCase
 
     public function test_user_can_approve_draft(): void
     {
-        $project = Project::factory()->create(['user_id' => $this->user->id]);
-        $draft = $this->createDraft($project);
+        $draft = $this->createDraft();
 
         $response = $this->actingAs($this->user)
-            ->postJson("/api/projects/{$project->id}/drafts/{$draft->id}/approve");
+            ->postJson("/api/features/{$this->feature->id}/drafts/{$draft->id}/approve");
 
         $response->assertOk();
-        $this->assertDatabaseHas('requirement_drafts', ['id' => $draft->id, 'status' => 'committed']);
+        $this->assertDatabaseHas('requirement_drafts', ['id' => $draft->id, 'status' => 'approved']);
     }
 
     public function test_user_cannot_access_another_users_drafts(): void
     {
         $otherProject = Project::factory()->create();
+        $otherFeature = Feature::factory()->create(['project_id' => $otherProject->id]);
 
         $this->actingAs($this->user)
-            ->getJson("/api/projects/{$otherProject->id}/drafts")
+            ->getJson("/api/features/{$otherFeature->id}/drafts")
             ->assertForbidden();
     }
 
     public function test_user_cannot_update_draft_from_another_project(): void
     {
-        $myProject = Project::factory()->create(['user_id' => $this->user->id]);
         $otherProject = Project::factory()->create();
-        $otherDraft = $this->createDraft($otherProject);
+        $otherFeature = Feature::factory()->create(['project_id' => $otherProject->id]);
+        $otherDraft = RequirementDraft::create([
+            'feature_id' => $otherFeature->id,
+            'type' => 'brd',
+            'content' => 'Some content',
+            'version' => 1,
+            'status' => 'draft',
+        ]);
 
         $this->actingAs($this->user)
-            ->patchJson("/api/projects/{$myProject->id}/drafts/{$otherDraft->id}", [
+            ->patchJson("/api/features/{$this->feature->id}/drafts/{$otherDraft->id}", [
                 'content' => 'Hacked',
             ])
             ->assertForbidden();
@@ -93,9 +101,8 @@ class RequirementDraftTest extends TestCase
 
     public function test_draft_versioning_increments(): void
     {
-        $project = Project::factory()->create(['user_id' => $this->user->id]);
-        $this->createDraft($project, ['type' => 'brd', 'version' => 1]);
-        $this->createDraft($project, ['type' => 'brd', 'version' => 2]);
+        $this->createDraft(['type' => 'brd', 'version' => 1]);
+        $this->createDraft(['type' => 'brd', 'version' => 2]);
 
         $this->assertDatabaseCount('requirement_drafts', 2);
     }

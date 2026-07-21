@@ -595,7 +595,6 @@ class GeminiGenerationService
         try {
             AiGenerationLog::create([
                 'user_id' => $this->currentUser?->id,
-                'project_id' => $this->currentProject?->id,
                 'feature_id' => $this->currentFeature?->id,
                 'type' => $type,
                 'model' => $this->model,

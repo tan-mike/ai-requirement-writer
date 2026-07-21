@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Feature;
 use App\Models\Persona;
 use App\Models\Project;
 use App\Models\User;
@@ -31,10 +32,11 @@ class ChatTest extends TestCase
     public function test_can_list_chat_messages(): void
     {
         $project = Project::factory()->create(['user_id' => $this->user->id]);
-        $project->chatMessages()->create(['role' => 'user', 'content' => 'Hello', 'order' => 1]);
+        $feature = Feature::factory()->create(['project_id' => $project->id]);
+        $feature->chatMessages()->create(['user_id' => $this->user->id, 'role' => 'user', 'content' => 'Hello']);
 
         $this->actingAs($this->user)
-            ->getJson("/api/projects/{$project->id}/messages")
+            ->getJson("/api/features/{$feature->id}/messages")
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.content', 'Hello');
@@ -44,18 +46,22 @@ class ChatTest extends TestCase
     {
         $project = Project::factory()->create([
             'user_id' => $this->user->id,
+        ]);
+        $feature = Feature::factory()->create([
+            'project_id' => $project->id,
             'lead_persona_id' => $this->persona->id,
         ]);
 
         $mock = $this->mock(GeminiGenerationService::class);
         $mock->shouldReceive('forUser')->andReturnSelf();
+        $mock->shouldReceive('forFeature')->andReturnSelf();
         $mock->shouldReceive('streamDiscoveryChat')
             ->andReturnUsing(function ($sp, $summary, $history, callable $cb) {
                 $cb('AI response');
             });
 
         $response = $this->actingAs($this->user)
-            ->postJson("/api/projects/{$project->id}/chat", [
+            ->postJson("/api/features/{$feature->id}/chat", [
                 'message' => 'User message',
             ]);
 
@@ -67,13 +73,13 @@ class ChatTest extends TestCase
         ob_end_clean();
         
         $this->assertDatabaseHas('chat_messages', [
-            'project_id' => $project->id,
+            'feature_id' => $feature->id,
             'role' => 'user',
             'content' => 'User message',
         ]);
 
         $this->assertDatabaseHas('chat_messages', [
-            'project_id' => $project->id,
+            'feature_id' => $feature->id,
             'role' => 'assistant',
             'content' => 'AI response',
         ]);
@@ -83,12 +89,16 @@ class ChatTest extends TestCase
     {
         $project = Project::factory()->create([
             'user_id' => $this->user->id,
-            'lead_persona_id' => $this->persona->id,
             'architecture_summary' => 'Existing Architecture Context',
+        ]);
+        $feature = Feature::factory()->create([
+            'project_id' => $project->id,
+            'lead_persona_id' => $this->persona->id,
         ]);
 
         $mock = $this->mock(GeminiGenerationService::class);
         $mock->shouldReceive('forUser')->andReturnSelf();
+        $mock->shouldReceive('forFeature')->andReturnSelf();
         $mock->shouldReceive('streamDiscoveryChat')
             ->withArgs(function ($sp, $summary, $history) {
                 return $summary === 'Existing Architecture Context';
@@ -96,21 +106,26 @@ class ChatTest extends TestCase
             ->andReturn(null);
 
         $this->actingAs($this->user)
-            ->postJson("/api/projects/{$project->id}/chat", [
+            ->postJson("/api/features/{$feature->id}/chat", [
                 'message' => 'Analyze this',
-            ]);
+            ])
+            ->assertOk();
     }
 
     public function test_brd_generation_uses_chat_history_context(): void
     {
         $project = Project::factory()->create([
             'user_id' => $this->user->id,
+        ]);
+        $feature = Feature::factory()->create([
+            'project_id' => $project->id,
             'lead_persona_id' => $this->persona->id,
         ]);
-        $project->chatMessages()->create(['role' => 'user', 'content' => 'Discovery info', 'order' => 1]);
+        $feature->chatMessages()->create(['user_id' => $this->user->id, 'role' => 'user', 'content' => 'Discovery info']);
 
         $mock = $this->mock(GeminiGenerationService::class);
         $mock->shouldReceive('forUser')->andReturnSelf();
+        $mock->shouldReceive('forFeature')->andReturnSelf();
         $mock->shouldReceive('streamBrd')
             ->withArgs(function ($sp, $fields, $chatHistory, $ctx) {
                 return count($chatHistory) === 1 && $chatHistory[0]['content'] === 'Discovery info';
@@ -118,7 +133,7 @@ class ChatTest extends TestCase
             ->andReturn(null);
 
         $this->actingAs($this->user)
-            ->postJson("/api/projects/{$project->id}/generate/brd", [
+            ->postJson("/api/features/{$feature->id}/generate/brd", [
                 'reviewer_persona_ids' => [],
             ])
             ->assertOk();
