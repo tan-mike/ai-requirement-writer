@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Feature;
 use App\Models\Project;
 use App\Models\User;
 use App\Models\AiGenerationLog;
@@ -38,13 +39,14 @@ class AiGenerationLoggingTest extends TestCase
 
         $user = User::factory()->create();
         $project = Project::factory()->create(['user_id' => $user->id]);
+        $feature = Feature::factory()->create(['project_id' => $project->id]);
         
-        $service = app(GeminiGenerationService::class)->forUser($user, $project);
+        $service = app(GeminiGenerationService::class)->forUser($user)->forFeature($feature);
         $service->generateCritique("You are a reviewer", "Some draft content", "brd");
 
         $this->assertDatabaseHas('ai_generation_logs', [
             'user_id' => $user->id,
-            'project_id' => $project->id,
+            'feature_id' => $feature->id,
             'type' => 'critique',
             'status' => 'success',
             'input_tokens' => 10,
@@ -61,8 +63,9 @@ class AiGenerationLoggingTest extends TestCase
 
         $user = User::factory()->create();
         $project = Project::factory()->create(['user_id' => $user->id]);
+        $feature = Feature::factory()->create(['project_id' => $project->id]);
         
-        $service = app(GeminiGenerationService::class)->forUser($user, $project);
+        $service = app(GeminiGenerationService::class)->forUser($user)->forFeature($feature);
         
         try {
             $service->generateCritique("You are a reviewer", "Some draft content", "brd");
@@ -72,7 +75,7 @@ class AiGenerationLoggingTest extends TestCase
 
         $this->assertDatabaseHas('ai_generation_logs', [
             'user_id' => $user->id,
-            'project_id' => $project->id,
+            'feature_id' => $feature->id,
             'type' => 'critique',
             'status' => 'failure',
             'error_message' => 'Gemini API Error',

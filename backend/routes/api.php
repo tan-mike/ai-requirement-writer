@@ -21,6 +21,12 @@ Route::prefix('auth')->group(function () {
         ->middleware('throttle:3,1');
 });
 
+Route::prefix('auth/google')->group(function () {
+    Route::get('/redirect', [\App\Http\Controllers\GoogleAuthController::class, 'redirect']);
+    Route::get('/callback', [\App\Http\Controllers\GoogleAuthController::class, 'callback'])
+        ->middleware('throttle:10,1');
+});
+
 // Auth routes that need auth:sanctum but NOT verified middleware
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -101,4 +107,5 @@ Route::middleware(['auth:sanctum', 'can:admin-access'])->prefix('admin')->group(
     Route::post('/projects', [\App\Http\Controllers\Admin\ProjectCurationController::class, 'store']);
     Route::get('/settings', [\App\Http\Controllers\Admin\SettingController::class, 'index']);
     Route::patch('/settings', [\App\Http\Controllers\Admin\SettingController::class, 'update']);
+    Route::post('/users/invite', \App\Http\Controllers\Admin\UserInviteController::class);
 });

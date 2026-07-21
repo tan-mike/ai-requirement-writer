@@ -29,6 +29,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'tour_flags',
         'current_team_id',
         'email_verified_at',
+        'google_id',
     ];
 
     protected $hidden = [

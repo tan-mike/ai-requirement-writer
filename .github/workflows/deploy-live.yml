@@ -5,6 +5,8 @@ on:
     tags:
       - "v*.*.*"
       - "!*-*"
+    branches:
+      - main
 
 permissions:  # ✅ Required for OIDC and repo access
   id-token: write

@@ -36,6 +36,12 @@ return [
     ],
 
     'google' => [
+        // OAuth (Socialite)
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI', '/auth/google/callback'),
+
+        // Drive (existing)
         'drive' => [
             'folder_id' => env('GOOGLE_DRIVE_FOLDER_ID'),
             'contexts_folder_id' => env('GOOGLE_DRIVE_CONTEXTS_FOLDER_ID'),
