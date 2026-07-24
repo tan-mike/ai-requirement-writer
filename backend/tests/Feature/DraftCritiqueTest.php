@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\DraftCritique;
+use App\Models\Feature;
 use App\Models\Persona;
 use App\Models\Project;
 use App\Models\RequirementDraft;
@@ -18,8 +19,9 @@ class DraftCritiqueTest extends TestCase
     {
         $user = User::factory()->create();
         $project = Project::factory()->create(['user_id' => $user->id]);
+        $feature = Feature::factory()->create(['project_id' => $project->id]);
         $draft = RequirementDraft::create([
-            'project_id' => $project->id,
+            'feature_id' => $feature->id,
             'type' => 'brd',
             'content' => 'Test content',
             'version' => 1,

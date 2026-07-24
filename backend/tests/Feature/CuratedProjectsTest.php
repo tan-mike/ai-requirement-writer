@@ -42,24 +42,18 @@ class CuratedProjectsTest extends TestCase
         $response = $this->actingAs($admin)->getJson('/api/projects');
 
         $response->assertStatus(200);
-        // Admin index currently shows own projects + curated. 
-        // Wait, index currently shows own + team. 
-        // I need to be careful about what I expect here.
-        // If I change index to ONLY curated for members, admin should probably still see their own.
-        $response->assertJsonCount(2, 'data');
+        // Admin sees own projects + curated projects (all 3 in this case)
+        $response->assertJsonCount(3, 'data');
     }
 
     public function test_regular_user_cannot_create_project_when_disabled()
     {
         config(['projects.creation_disabled' => true]);
         $user = User::factory()->create(['role' => 'member']);
-        $persona = \App\Models\Persona::factory()->create();
 
         $response = $this->actingAs($user)->postJson('/api/projects', [
             'name' => 'New Project',
             'type' => 'webapp',
-            'mode' => 'template',
-            'lead_persona_id' => $persona->id,
         ]);
 
         $response->assertStatus(403);
@@ -69,13 +63,10 @@ class CuratedProjectsTest extends TestCase
     {
         config(['projects.creation_disabled' => true]);
         $admin = User::factory()->create(['role' => 'admin']);
-        $persona = \App\Models\Persona::factory()->create();
 
         $response = $this->actingAs($admin)->postJson('/api/projects', [
             'name' => 'Admin Project',
             'type' => 'webapp',
-            'mode' => 'template',
-            'lead_persona_id' => $persona->id,
         ]);
 
         $response->assertStatus(201);

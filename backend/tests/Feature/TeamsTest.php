@@ -82,7 +82,6 @@ class TeamsTest extends TestCase
         $project = Project::factory()->create([
             'user_id' => $this->user->id,
             'team_id' => $team->id,
-            'lead_persona_id' => $this->persona->id,
         ]);
 
         $member->update(['current_team_id' => $team->id]);

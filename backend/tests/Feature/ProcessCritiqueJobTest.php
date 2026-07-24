@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\ProcessCritiqueJob;
 use App\Models\DraftCritique;
+use App\Models\Feature;
 use App\Models\Persona;
 use App\Models\Project;
 use App\Models\RequirementDraft;
@@ -20,8 +21,10 @@ class ProcessCritiqueJobTest extends TestCase
     {
         $user = User::factory()->create();
         $project = Project::factory()->create(['user_id' => $user->id]);
+        $feature = Feature::factory()->create(['project_id' => $project->id]);
         $draft = RequirementDraft::create([
-            'project_id' => $project->id,
+            'feature_id' => $feature->id,
+            'user_id' => $user->id,
             'type' => 'brd',
             'content' => 'Test content',
             'version' => 1,
@@ -39,6 +42,7 @@ class ProcessCritiqueJobTest extends TestCase
 
         $mockGemini = $this->mock(GeminiGenerationService::class);
         $mockGemini->shouldReceive('forUser')->andReturnSelf();
+        $mockGemini->shouldReceive('forFeature')->andReturnSelf();
         $mockGemini->shouldReceive('generateCritique')
             ->once()
             ->andReturn('Test critique content');
@@ -46,7 +50,6 @@ class ProcessCritiqueJobTest extends TestCase
         $job = new ProcessCritiqueJob($draft, $reviewer);
         $job->handle($mockGemini);
 
-        // This should fail currently because it saves to 'critiques' column
         $this->assertDatabaseHas('draft_critiques', [
             'requirement_draft_id' => $draft->id,
             'persona_id' => $reviewer->id,
@@ -59,6 +62,7 @@ class ProcessCritiqueJobTest extends TestCase
     {
         $user = User::factory()->create();
         $project = Project::factory()->create(['user_id' => $user->id]);
+        $feature = Feature::factory()->create(['project_id' => $project->id]);
         
         $reviewer1 = Persona::create([
             'slug' => 'reviewer-1',
@@ -75,7 +79,8 @@ class ProcessCritiqueJobTest extends TestCase
         ]);
 
         $draft = RequirementDraft::create([
-            'project_id' => $project->id,
+            'feature_id' => $feature->id,
+            'user_id' => $user->id,
             'type' => 'brd',
             'content' => 'Test content',
             'version' => 1,
@@ -93,6 +98,7 @@ class ProcessCritiqueJobTest extends TestCase
 
         $mockGemini = $this->mock(GeminiGenerationService::class);
         $mockGemini->shouldReceive('forUser')->andReturnSelf();
+        $mockGemini->shouldReceive('forFeature')->andReturnSelf();
         $mockGemini->shouldReceive('generateCritique')
             ->andReturn('Second critique content');
 
