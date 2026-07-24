@@ -82,6 +82,8 @@ Generate → [Edit / Synthesize] → Approve & Finalize
 
 Both are written at draft creation in `GenerationController::generate()` and copied into the recipe snapshot at scoring time. Nullable so existing rows and non-AI drafts stay valid.
 
+**Note:** `GeminiGenerationService::$model` is currently `private` with only a setter. The implementation adds a public accessor (e.g. `getModel()`) so the controller can record the model at draft creation.
+
 ### 4.3 Model Relations
 
 - `DraftScore` → `belongsTo(RequirementDraft)`, `belongsTo(User)`; casts `criterion_scores` and `recipe_snapshot` to array
@@ -167,9 +169,12 @@ Existing guards unchanged: `checkAccess()` (ownership, draft-to-feature consiste
 
 **Response:** unchanged shape — `{"data": $draft->fresh()}`.
 
-### 6.2 `GET /api/scoring-config` (new, authenticated)
+### 6.2 `GET /api/scoring-config` (new)
 
 Returns the rubric config (criteria, labels, questions, anchors, tag sets, threshold) so the frontend never hardcodes it. Single source of truth; config changes propagate without a frontend deploy.
+
+- **Middleware:** same `auth:sanctum` + `verified` group as the other feature routes
+- **Response:** project-standard envelope — `{"data": { "low_score_threshold": 2, "criteria": { ... } }}`
 
 ---
 
@@ -213,12 +218,14 @@ Returns the rubric config (criteria, labels, questions, anchors, tag sets, thres
 
 - No new throttle needed — approve is a single authenticated action already gated by ownership checks
 - The unique index on `requirement_draft_id` plus the already-approved guard prevents double-approval races from creating duplicate scores
+- The losing request in a true race will hit the unique constraint as a DB exception; the controller catches it and returns the same clean 422 as the already-approved guard (no raw 500)
 
 ---
 
 ## 10. Testing
 
 **Backend feature tests:**
+- **Update existing approve tests** (e.g. `RequirementDraftTest::test_user_can_approve_draft`) — they post with no payload and will now 422; they must include a valid `scores` payload
 - Approve rejected (422) without `scores`, with a missing criterion, with an unknown criterion, with score out of range
 - Low score (≤ 2) without tags → 422; with tags from the wrong criterion's set → 422
 - Happy path: score row created with the correct criterion map, computed `overall_score`, and full recipe snapshot; draft status becomes `approved`
