@@ -99,4 +99,29 @@ describe('ScoringModal', () => {
     })
     expect(onApproved).toHaveBeenCalled()
   })
+
+  it('drops stale tags when a low score is raised above the threshold', async () => {
+    renderModal()
+    await screen.findByText('Domain Accuracy')
+
+    // Score domain_accuracy low (1) and pick a tag...
+    fireEvent.click(screen.getAllByRole('radio', { name: '1' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Hallucinated feature' }))
+    // ...then raise it above the threshold; the tag must be cleared.
+    fireEvent.click(screen.getAllByRole('radio', { name: '4' })[0])
+    fireEvent.click(screen.getAllByRole('radio', { name: '5' })[1])
+    fireEvent.click(screen.getByRole('button', { name: /score & approve/i }))
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/features/1/drafts/42/approve',
+        {
+          scores: {
+            domain_accuracy: { score: 4, tags: [] },
+            structural_completeness: { score: 5, tags: [] },
+          },
+        }
+      )
+    })
+  })
 })

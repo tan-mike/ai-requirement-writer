@@ -45,8 +45,16 @@ export default function ScoringModal({ featureId, draftId, onClose, onApproved }
       .catch(() => setLoadError('Could not load the scoring rubric. Please retry.'))
   }, [])
 
+  const threshold = config?.low_score_threshold ?? 2
+
   function setScore(key: string, value: number) {
-    setScores(prev => ({ ...prev, [key]: { score: value, tags: prev[key]?.tags ?? [] } }))
+    setScores(prev => ({
+      ...prev,
+      // Clear any previously selected issue tags when the score is raised above
+      // the threshold — the backend rejects tags on high scores, and the tag
+      // picker is hidden so the user could not remove them manually.
+      [key]: { score: value, tags: value <= threshold ? (prev[key]?.tags ?? []) : [] },
+    }))
   }
 
   function toggleTag(key: string, tag: string) {
@@ -57,7 +65,6 @@ export default function ScoringModal({ featureId, draftId, onClose, onApproved }
     })
   }
 
-  const threshold = config?.low_score_threshold ?? 2
   const needsTags = (s: CriterionScore) => s.score !== null && s.score <= threshold
 
   const isValid = config !== null && Object.keys(config.criteria).every(key => {
@@ -144,6 +151,7 @@ export default function ScoringModal({ featureId, draftId, onClose, onApproved }
                             <button
                               key={tagKey}
                               type="button"
+                              aria-pressed={active}
                               onClick={() => toggleTag(key, tagKey)}
                               className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                                 active
