@@ -2,10 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DraftScore;
 use App\Models\Feature;
 use App\Models\RequirementDraft;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class RequirementDraftController extends Controller
 {
@@ -72,8 +77,71 @@ class RequirementDraftController extends Controller
             return response()->json(['message' => 'Cannot approve drafts for a finalized feature.'], 422);
         }
 
-        // Simple approve for now, we'll need to update GraphOrchestratorService later if needed
-        $draft->approve();
+        if ($draft->status === 'approved') {
+            return response()->json(['message' => 'Draft has already been approved.'], 422);
+        }
+
+        $criteria = config('scoring.criteria');
+        $threshold = (int) config('scoring.low_score_threshold', 2);
+
+        $rules = [
+            'scores' => ['required', 'array:' . implode(',', array_keys($criteria))],
+        ];
+        foreach ($criteria as $key => $criterion) {
+            $rules["scores.{$key}.score"] = ['required', 'integer', 'min:1', 'max:5'];
+            $rules["scores.{$key}.tags"] = ['array'];
+            $rules["scores.{$key}.tags.*"] = [Rule::in(array_keys($criterion['tags']))];
+        }
+
+        $validator = Validator::make($request->all(), $rules);
+
+        $validator->after(function ($validator) use ($request, $criteria, $threshold) {
+            foreach ($criteria as $key => $criterion) {
+                $score = $request->input("scores.{$key}.score");
+                $tags = $request->input("scores.{$key}.tags", []);
+                if (is_int($score) && $score <= $threshold && count($tags) === 0) {
+                    $validator->errors()->add(
+                        "scores.{$key}.tags",
+                        "Select at least one issue tag for {$criterion['label']}."
+                    );
+                }
+            }
+        });
+
+        $validator->validate();
+
+        $scores = $request->input('scores');
+
+        try {
+            DB::transaction(function () use ($draft, $scores, $request) {
+                DraftScore::create([
+                    'requirement_draft_id' => $draft->id,
+                    'user_id' => $request->user()->id,
+                    'criterion_scores' => collect($scores)->map(fn ($c) => [
+                        'score' => (int) $c['score'],
+                        'tags' => $c['tags'] ?? [],
+                    ])->all(),
+                    'overall_score' => round(collect($scores)->avg(fn ($c) => $c['score']), 1),
+                    'recipe_snapshot' => [
+                        'lead_persona_id' => $draft->lead_persona_id,
+                        'reviewer_persona_ids' => $draft->reviewer_persona_ids,
+                        'context_ids' => $draft->context_ids,
+                        'model' => $draft->model,
+                        'draft_type' => $draft->type,
+                        'draft_version' => $draft->version,
+                    ],
+                ]);
+
+                $draft->approve();
+            });
+        } catch (QueryException $e) {
+            // SQLSTATE class 23 = integrity constraint violation (unique race)
+            if (str_starts_with((string) ($e->errorInfo[0] ?? ''), '23')) {
+                return response()->json(['message' => 'Draft has already been approved.'], 422);
+            }
+            throw $e;
+        }
+
         return response()->json(['data' => $draft->fresh()]);
     }
 }
