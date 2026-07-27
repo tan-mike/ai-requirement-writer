@@ -126,6 +126,7 @@ class ChatTest extends TestCase
         $mock = $this->mock(GeminiGenerationService::class);
         $mock->shouldReceive('forUser')->andReturnSelf();
         $mock->shouldReceive('forFeature')->andReturnSelf();
+        $mock->shouldReceive('getModel')->andReturn('gemma-4-26b-a4b-it');
         $mock->shouldReceive('streamBrd')
             ->withArgs(function ($sp, $fields, $chatHistory, $ctx) {
                 return count($chatHistory) === 1 && $chatHistory[0]['content'] === 'Discovery info';

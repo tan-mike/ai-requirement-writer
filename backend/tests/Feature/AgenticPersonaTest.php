@@ -77,6 +77,7 @@ class AgenticPersonaTest extends TestCase
         $mock = $this->mock(GeminiGenerationService::class);
         $mock->shouldReceive('forUser')->andReturnSelf();
         $mock->shouldReceive('forFeature')->andReturnSelf();
+        $mock->shouldReceive('getModel')->andReturn('gemma-4-26b-a4b-it');
         $mock->shouldReceive('streamBrd')->andReturnUsing(function ($sp, $fields, $chat, $ctx, callable $cb) {
             $cb('Draft content');
         });

@@ -64,7 +64,12 @@ class RequirementDraftTest extends TestCase
         $draft = $this->createDraft();
 
         $response = $this->actingAs($this->user)
-            ->postJson("/api/features/{$this->feature->id}/drafts/{$draft->id}/approve");
+            ->postJson("/api/features/{$this->feature->id}/drafts/{$draft->id}/approve", [
+                'scores' => [
+                    'domain_accuracy' => ['score' => 4, 'tags' => []],
+                    'structural_completeness' => ['score' => 5, 'tags' => []],
+                ],
+            ]);
 
         $response->assertOk();
         $this->assertDatabaseHas('requirement_drafts', ['id' => $draft->id, 'status' => 'approved']);
