@@ -90,6 +90,8 @@ class GenerationController extends Controller
             'status' => 'drafting',
             'lead_persona_id' => $leadPersona->id,
             'reviewer_persona_ids' => $reviewers->pluck('id')->toArray(),
+            'context_ids' => $contexts->pluck('id')->values()->all(),
+            'model' => $this->gemini->getModel(),
         ]);
 
         return response()->stream(function () use ($feature, $draft, $leadPersona, $reviewers, $contexts, $type, $request) {
