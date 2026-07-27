@@ -675,10 +675,27 @@ Replace the `approve()` method with:
             foreach ($criteria as $key => $criterion) {
                 $score = $request->input("scores.{$key}.score");
                 $tags = $request->input("scores.{$key}.tags", []);
-                if (is_int($score) && $score <= $threshold && count($tags) === 0) {
+
+                // The `integer` rule accepts numeric strings (e.g. "2"), so use an
+                // integer-like check here rather than is_int() to avoid bypassing the
+                // required-tag rule with a numeric-string score.
+                if (!is_numeric($score)) {
+                    continue;
+                }
+
+                $score = (int) $score;
+
+                if ($score <= $threshold && count($tags) === 0) {
                     $validator->errors()->add(
                         "scores.{$key}.tags",
                         "Select at least one issue tag for {$criterion['label']}."
+                    );
+                }
+
+                if ($score > $threshold && count($tags) > 0) {
+                    $validator->errors()->add(
+                        "scores.{$key}.tags",
+                        "Remove issue tags for {$criterion['label']} when the score is above {$threshold}."
                     );
                 }
             }

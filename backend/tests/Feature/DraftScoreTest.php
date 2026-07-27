@@ -150,6 +150,36 @@ class DraftScoreTest extends TestCase
             ->assertJsonValidationErrors(['scores.domain_accuracy.tags']);
     }
 
+    public function test_numeric_string_low_score_still_requires_tag(): void
+    {
+        $feature = $this->makeFeature();
+        $draft = $this->makeDraft($feature);
+
+        $scores = $this->validScores();
+        // The `integer` rule accepts numeric strings; the tag requirement must still apply.
+        $scores['domain_accuracy'] = ['score' => '2', 'tags' => []];
+
+        $this->actingAs($this->user)
+            ->postJson("/api/features/{$feature->id}/drafts/{$draft->id}/approve", ['scores' => $scores])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['scores.domain_accuracy.tags']);
+    }
+
+    public function test_high_score_with_tags_is_rejected(): void
+    {
+        $feature = $this->makeFeature();
+        $draft = $this->makeDraft($feature);
+
+        $scores = $this->validScores();
+        // Score 4 is above the threshold (2), so tags must be empty.
+        $scores['domain_accuracy'] = ['score' => 4, 'tags' => ['hallucinated_feature']];
+
+        $this->actingAs($this->user)
+            ->postJson("/api/features/{$feature->id}/drafts/{$draft->id}/approve", ['scores' => $scores])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['scores.domain_accuracy.tags']);
+    }
+
     public function test_tag_from_wrong_criterion_is_rejected(): void
     {
         $feature = $this->makeFeature();
