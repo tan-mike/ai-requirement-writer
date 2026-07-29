@@ -84,6 +84,14 @@ class GeminiGenerationService
     }
 
     /**
+     * Get the model identifier used for generation.
+     */
+    public function getModel(): string
+    {
+        return $this->model;
+    }
+
+    /**
      * Stream BRD generation from intake fields and/or chat history.
      */
     public function streamBrd(string $systemPrompt, array $intakeFields, array $chatHistory, array $additionalContexts, callable $onChunk, ?\App\Models\RequirementDraft $draft = null): void
