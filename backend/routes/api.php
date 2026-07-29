@@ -91,6 +91,9 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/user/settings', [\App\Http\Controllers\UserSettingsController::class, 'show']);
     Route::patch('/user/settings', [\App\Http\Controllers\UserSettingsController::class, 'update']);
 
+    // Scoring rubric config
+    Route::get('/scoring-config', \App\Http\Controllers\ScoringConfigController::class);
+
     // Drafts - scoped to Feature
     Route::get('/features/{feature}/drafts', [RequirementDraftController::class, 'index']);
     Route::get('/features/{feature}/drafts/{draft}', [RequirementDraftController::class, 'show']);

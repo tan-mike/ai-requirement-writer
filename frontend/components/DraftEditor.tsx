@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { apiClient } from '@/lib/api'
+import ScoringModal from '@/components/ScoringModal'
 
 interface Props {
   featureId: string
@@ -13,7 +14,7 @@ interface Props {
 export default function DraftEditor({ featureId, draft, onApproved, readOnly = false }: Props) {
   const [content, setContent] = useState(draft.content ?? '')
   const [saving, setSaving] = useState(false)
-  const [approving, setApproving] = useState(false)
+  const [showScoring, setShowScoring] = useState(false)
   const [error, setError] = useState('')
 
   // Sync when draft content changes externally (e.g. after reprompt accept)
@@ -35,19 +36,6 @@ export default function DraftEditor({ featureId, draft, onApproved, readOnly = f
       setError(err instanceof Error ? err.message : 'Save failed')
     } finally {
       setSaving(false)
-    }
-  }
-
-  async function handleApprove() {
-    if (readOnly) return
-    setApproving(true)
-    try {
-      await apiClient.post(`/features/${featureId}/drafts/${draft.id}/approve`, {})
-      onApproved()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Approve failed')
-    } finally {
-      setApproving(false)
     }
   }
 
@@ -93,12 +81,21 @@ export default function DraftEditor({ featureId, draft, onApproved, readOnly = f
             >
             {saving ? 'Saving changes...' : 'Save Draft'}
             </button>
-            <button onClick={handleApprove} disabled={approving}
+            <button onClick={() => setShowScoring(true)}
             className="btn-primary flex-1 py-2.5 shadow-lg shadow-primary/20"
             >
-            {approving ? 'Approving...' : 'Approve & Finalize'}
+            Approve & Finalize
             </button>
         </div>
+      )}
+
+      {showScoring && (
+        <ScoringModal
+          featureId={featureId}
+          draftId={draft.id}
+          onClose={() => setShowScoring(false)}
+          onApproved={() => { setShowScoring(false); onApproved() }}
+        />
       )}
     </div>
   )

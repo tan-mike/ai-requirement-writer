@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class RequirementDraft extends Model
 {
@@ -23,10 +24,13 @@ class RequirementDraft extends Model
         'status',
         'lead_persona_id',
         'reviewer_persona_ids',
+        'context_ids',
+        'model',
     ];
 
     protected $casts = [
         'reviewer_persona_ids' => 'array',
+        'context_ids' => 'array',
         'version' => 'integer',
     ];
 
@@ -53,6 +57,11 @@ class RequirementDraft extends Model
     public function critiques(): HasMany
     {
         return $this->hasMany(DraftCritique::class);
+    }
+
+    public function score(): HasOne
+    {
+        return $this->hasOne(DraftScore::class);
     }
 
     public function scopeApproved(Builder $query): Builder

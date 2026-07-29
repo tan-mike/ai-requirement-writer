@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 # ─── Wait for MySQL to be ready ────────────────────────────────────
 echo "Waiting for MySQL to be ready..."
@@ -25,9 +26,10 @@ chmod -R 775 /var/www/html/backend/storage
 WORKER_COUNT=${QUEUE_WORKER_COUNT:-1}
 sed -i "s/numprocs=1/numprocs=$WORKER_COUNT/" /etc/supervisor/conf.d/supervisord.conf
 
-# Run migrations
+# Run migrations (fail-fast: container must not start with unapplied migrations)
+echo "Running migrations..."
 php /var/www/html/backend/artisan migrate --force
-
+echo "Migrations complete."
 
 # Run seeders (idempotent — uses firstOrCreate to preserve user customizations)
 php /var/www/html/backend/artisan db:seed --force
