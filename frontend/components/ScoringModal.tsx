@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { apiClient } from '@/lib/api'
-import InfoTooltip from '@/components/InfoTooltip'
 
 interface CriterionConfig {
   label: string
@@ -93,8 +93,8 @@ export default function ScoringModal({ featureId, draftId, onClose, onApproved }
     }
   }
 
-  return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-200">
+  const modal = (
+    <div className="fixed inset-0 bg-background/95 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in duration-200">
       <div className="bg-card border border-border rounded-2xl p-8 max-w-lg w-full shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
         <h3 className="text-xl font-bold mb-1">Score this draft</h3>
         <p className="text-sm text-muted-foreground mb-6">
@@ -111,13 +111,13 @@ export default function ScoringModal({ featureId, draftId, onClose, onApproved }
           <div className="space-y-6">
             {Object.entries(config.criteria).map(([key, criterion]) => {
               const s = scores[key] ?? { score: null, tags: [] }
-              const tooltip = `${criterion.question} (1 = ${criterion.anchors['1']}; 5 = ${criterion.anchors['5']})`
               return (
                 <div key={key} className="border border-border rounded-xl p-4">
-                  <div className="flex items-center mb-3">
-                    <span className="text-sm font-bold">{criterion.label}</span>
-                    <InfoTooltip text={tooltip} />
-                  </div>
+                  <p className="text-sm font-bold mb-1">{criterion.label}</p>
+                  <p className="text-xs text-muted-foreground mb-1">{criterion.question}</p>
+                  <p className="text-[10px] text-muted-foreground/70 mb-3">
+                    1 = {criterion.anchors['1']} · 5 = {criterion.anchors['5']}
+                  </p>
 
                   <div className="flex gap-1.5" role="radiogroup" aria-label={criterion.label}>
                     {[1, 2, 3, 4, 5].map(n => (
@@ -192,4 +192,6 @@ export default function ScoringModal({ featureId, draftId, onClose, onApproved }
       </div>
     </div>
   )
+
+  return createPortal(modal, document.body)
 }
