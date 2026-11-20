@@ -5,58 +5,116 @@ namespace App\Services;
 use App\Models\User;
 use App\Models\Project;
 use App\Models\AiGenerationLog;
-use Gemini\Client;
-use Gemini\Data\Content;
-use Gemini\Enums\Role;
-use Gemini\Laravel\Facades\Gemini;
+use App\Services\Ai\OpenAiCompatibleClient;
 use Illuminate\Support\Facades\Log;
 use App\Services\MemoryGovernorService;
 
-class GeminiGenerationService
+/**
+ * Generates requirement documents through any OpenAI-compatible Chat Completions provider.
+ *
+ * Provider, key and model come from config/ai.php. A user with a personal API key
+ * can override the base URL and model in their settings.
+ */
+class AiGenerationService
 {
-    private string $model = 'gemma-4-26b-a4b-it';
+    private string $model;
     private ?User $currentUser = null;
     private ?Project $currentProject = null;
     private ?\App\Models\Feature $currentFeature = null;
-    private ?Client $customClient = null;
+    private ?OpenAiCompatibleClient $client = null;
+    private bool $usingPersonalKey = false;
     private bool $effectiveFreeTier = false;
     protected MemoryGovernorService $memory;
 
     public function __construct(MemoryGovernorService $memory)
     {
         $this->memory = $memory;
+        $this->model = (string) config('ai.model');
     }
 
     /**
      * Configure the service for a specific user and project context.
+     *
+     * @throws \RuntimeException when neither the user nor the platform has an API key.
      */
     public function forUser(?User $user, ?Project $project = null): self
     {
         $this->currentUser = $user;
         $this->currentProject = $project;
-        $this->customClient = null;
-        $this->effectiveFreeTier = (bool) config('gemini.platform_free_tier', false);
+        $this->client = null;
+        $timeout = (int) config('ai.request_timeout', 120);
 
-        if ($user && $user->gemini_api_key) {
-            // Initialize custom client with user's personal key
-            $this->customClient = \Gemini::factory()
-                ->withApiKey($user->gemini_api_key)
-                ->withHttpHeader('Accept', 'application/json')
-                ->make();
-            
-            // Use user's personal free-tier setting for their own key
-            $this->effectiveFreeTier = (bool) $user->free_tier;
-        } elseif (!config('gemini.api_key')) {
-            // No user key and no platform key configured
-            throw new \RuntimeException(
-                'No Gemini API key configured. Please set your personal API key in Settings, or ask your administrator to configure the platform key.'
+        if ($user && $user->ai_api_key) {
+            // Personal key: the user's provider and model override the platform defaults.
+            // With no saved base URL the default provider preset (Gemini) is used.
+            // User-supplied URLs must be public https hosts.
+            $defaultPreset = config('ai.providers.' . config('ai.default_provider'));
+            $baseUrl = $user->ai_base_url ?: ($defaultPreset['base_url'] ?? (string) config('ai.base_url'));
+
+            $this->usingPersonalKey = true;
+            $this->client = new OpenAiCompatibleClient(
+                baseUrl: $baseUrl,
+                apiKey: $user->ai_api_key,
+                timeout: $timeout,
+                requirePublicHost: $user->ai_base_url && !self::isPresetBaseUrl($baseUrl),
             );
+            $this->model = $user->ai_model
+                ?: (self::presetForBaseUrl($baseUrl)['default_model'] ?? null)
+                ?: (string) config('ai.model');
+            $this->effectiveFreeTier = (bool) $user->free_tier;
         } else {
-            // Use platform key with platform free-tier setting
-            $this->effectiveFreeTier = (bool) config('gemini.platform_free_tier', false);
+            $this->usePlatformCredentials();
         }
 
         return $this;
+    }
+
+    /**
+     * @throws \RuntimeException when the platform API key is not configured.
+     */
+    private function usePlatformCredentials(): void
+    {
+        if (!config('ai.api_key')) {
+            throw new \RuntimeException(
+                'No AI API key configured. Please set your personal API key in Settings, or ask your administrator to configure the platform key.'
+            );
+        }
+
+        $this->usingPersonalKey = false;
+        $this->client = new OpenAiCompatibleClient(
+            baseUrl: (string) config('ai.base_url'),
+            apiKey: (string) config('ai.api_key'),
+            timeout: (int) config('ai.request_timeout', 120),
+        );
+        $this->model = (string) config('ai.model');
+        $this->effectiveFreeTier = (bool) config('ai.platform_free_tier', false);
+    }
+
+    /**
+     * Find the provider preset whose base URL matches, ignoring a trailing slash.
+     */
+    private static function presetForBaseUrl(string $baseUrl): ?array
+    {
+        $normalised = rtrim(trim($baseUrl), '/');
+
+        return collect(config('ai.providers', []))
+            ->first(fn (array $preset) => rtrim($preset['base_url'] ?? '', '/') === $normalised);
+    }
+
+    /**
+     * Whether the URL is one of the configured provider presets (trusted, no host check needed).
+     */
+    public static function isPresetBaseUrl(string $baseUrl): bool
+    {
+        return self::presetForBaseUrl($baseUrl) !== null;
+    }
+
+    /**
+     * Whether requests use the current user's personal API key.
+     */
+    public function usesPersonalKey(): bool
+    {
+        return $this->usingPersonalKey;
     }
 
     public function forFeature(\App\Models\Feature $feature): self
@@ -67,11 +125,15 @@ class GeminiGenerationService
     }
 
     /**
-     * Get the active client (custom or platform default).
+     * Get the configured client, defaulting to platform credentials when forUser() was not called.
      */
-    private function getClient(): mixed
+    private function getClient(): OpenAiCompatibleClient
     {
-        return $this->customClient ?? Gemini::getFacadeRoot();
+        if (!$this->client) {
+            $this->usePlatformCredentials();
+        }
+
+        return $this->client;
     }
 
     /**
@@ -141,17 +203,13 @@ class GeminiGenerationService
         $startTime = microtime(true);
 
         try {
-            $response = $this->getClient()->generativeModel(model: $this->model)
-                ->withSystemInstruction(Content::parse($systemPrompt))
-                ->generateContent($prompt);
+            $result = $this->getClient()->chat($this->model, [
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user', 'content' => $prompt],
+            ]);
 
-            $text = $this->safeExtractText($response);
+            $text = $result['text'];
             $duration = (int) ((microtime(true) - $startTime) * 1000);
-
-            // Extract usage metadata if available
-            $inputTokens = $response->usageMetadata->promptTokenCount ?? null;
-            $outputTokens = $response->usageMetadata->candidatesTokenCount ?? null;
-            $totalTokens = $response->usageMetadata->totalTokenCount ?? null;
 
             $this->recordLog(
                 type: 'critique',
@@ -159,9 +217,9 @@ class GeminiGenerationService
                 systemPrompt: $systemPrompt,
                 inputPrompt: $prompt,
                 outputText: $text,
-                inputTokens: $inputTokens,
-                outputTokens: $outputTokens,
-                totalTokens: $totalTokens,
+                inputTokens: $result['usage']['input'],
+                outputTokens: $result['usage']['output'],
+                totalTokens: $result['usage']['total'],
                 executionTimeMs: $duration
             );
 
@@ -235,11 +293,12 @@ class GeminiGenerationService
         $startTime = microtime(true);
 
         try {
-            $response = $this->getClient()->generativeModel(model: $this->model)
-                ->withSystemInstruction(Content::parse($systemInstruction))
-                ->generateContent($prompt);
+            $result = $this->getClient()->chat($this->model, [
+                ['role' => 'system', 'content' => $systemInstruction],
+                ['role' => 'user', 'content' => $prompt],
+            ]);
 
-            $text = $this->safeExtractText($response);
+            $text = $result['text'];
             $duration = (int) ((microtime(true) - $startTime) * 1000);
 
             $this->recordLog(
@@ -248,9 +307,9 @@ class GeminiGenerationService
                 systemPrompt: $systemInstruction,
                 inputPrompt: $prompt,
                 outputText: $text,
-                inputTokens: $response->usageMetadata->promptTokenCount ?? null,
-                outputTokens: $response->usageMetadata->candidatesTokenCount ?? null,
-                totalTokens: $response->usageMetadata->totalTokenCount ?? null,
+                inputTokens: $result['usage']['input'],
+                outputTokens: $result['usage']['output'],
+                totalTokens: $result['usage']['total'],
                 executionTimeMs: $duration
             );
 
@@ -328,9 +387,14 @@ class GeminiGenerationService
         $lastMessage = $historyCollection->pop();
         $lastText = $lastMessage['content'] ?? '';
 
-        $chatHistory = $historyCollection->map(fn($msg) => 
-            Content::parse($msg['content'], $msg['role'] === 'assistant' ? Role::MODEL : Role::USER)
-        )->toArray();
+        $messages = [['role' => 'system', 'content' => $fullSystemPrompt]];
+        foreach ($historyCollection as $msg) {
+            $messages[] = [
+                'role' => $msg['role'] === 'assistant' ? 'assistant' : 'user',
+                'content' => (string) $msg['content'],
+            ];
+        }
+        $messages[] = ['role' => 'user', 'content' => $lastText];
 
         $startTime = microtime(true);
         $fullOutput = '';
@@ -345,23 +409,19 @@ class GeminiGenerationService
                 'project_id' => $this->currentProject?->id,
             ]);
 
-            $chat = $this->getClient()->generativeModel(model: $this->model)
-                ->withSystemInstruction(Content::parse($fullSystemPrompt))
-                ->startChat(history: $chatHistory);
+            $stream = $this->getClient()->stream($this->model, $messages, (bool) config('ai.stream_usage', true));
 
-            $stream = $chat->streamSendMessage($lastText);
-
-            foreach ($stream as $response) {
-                $text = $this->safeExtractText($response);
+            foreach ($stream as $event) {
+                $text = $event['text'];
                 if ($text !== '') {
                     $fullOutput .= $text;
                     $onChunk($text);
                 }
 
-                if (isset($response->usageMetadata)) {
-                    $inputTokens = $response->usageMetadata->promptTokenCount ?? $inputTokens;
-                    $outputTokens = $response->usageMetadata->candidatesTokenCount ?? $outputTokens;
-                    $totalTokens = $response->usageMetadata->totalTokenCount ?? $totalTokens;
+                if ($event['usage']) {
+                    $inputTokens = $event['usage']['input'] ?? $inputTokens;
+                    $outputTokens = $event['usage']['output'] ?? $outputTokens;
+                    $totalTokens = $event['usage']['total'] ?? $totalTokens;
                 }
             }
 
@@ -446,9 +506,10 @@ class GeminiGenerationService
         $totalTokens = null;
 
         try {
-            $stream = $this->getClient()->generativeModel(model: $this->model)
-                ->withSystemInstruction(Content::parse($systemPrompt))
-                ->streamGenerateContent($userPrompt);
+            $stream = $this->getClient()->stream($this->model, [
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user', 'content' => $userPrompt],
+            ], (bool) config('ai.stream_usage', true));
 
             Log::channel('generations')->info("Streaming Generation Started", [
                 'model' => $this->model,
@@ -461,9 +522,9 @@ class GeminiGenerationService
             $buffer = '';
             $headingFound = false;
 
-            foreach ($stream as $response) {
-                $text = $this->safeExtractText($response);
-                
+            foreach ($stream as $event) {
+                $text = $event['text'];
+
                 if ($text !== '') {
                     $fullOutput .= $text;
                     
@@ -492,10 +553,10 @@ class GeminiGenerationService
                 }
 
                 // Capture tokens from the final chunk (if available)
-                if (isset($response->usageMetadata)) {
-                    $inputTokens = $response->usageMetadata->promptTokenCount ?? $inputTokens;
-                    $outputTokens = $response->usageMetadata->candidatesTokenCount ?? $outputTokens;
-                    $totalTokens = $response->usageMetadata->totalTokenCount ?? $totalTokens;
+                if ($event['usage']) {
+                    $inputTokens = $event['usage']['input'] ?? $inputTokens;
+                    $outputTokens = $event['usage']['output'] ?? $outputTokens;
+                    $totalTokens = $event['usage']['total'] ?? $totalTokens;
                 }
             }
 
@@ -528,28 +589,6 @@ class GeminiGenerationService
 
             throw $e;
         }
-    }
-
-    /**
-     * Safely extract text from a Gemini response, handling multi-part content.
-     * Skips parts marked as 'thought' (internal reasoning).
-     */
-    private function safeExtractText(mixed $response): string
-    {
-        $text = '';
-        foreach ($response->candidates as $candidate) {
-            foreach ($candidate->content->parts as $part) {
-                // Skip internal reasoning/thoughts
-                if (property_exists($part, 'thought') && $part->thought) {
-                    continue;
-                }
-                
-                if (isset($part->text)) {
-                    $text .= $part->text;
-                }
-            }
-        }
-        return $text;
     }
 
     /**

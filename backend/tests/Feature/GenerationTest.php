@@ -7,7 +7,7 @@ use App\Models\Persona;
 use App\Models\Project;
 use App\Models\RequirementDraft;
 use App\Models\User;
-use App\Services\GeminiGenerationService;
+use App\Services\AiGenerationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -61,7 +61,7 @@ class GenerationTest extends TestCase
         $feature = $this->createFeatureWithProject();
         $this->createIntake($feature);
 
-        $mock = $this->mock(GeminiGenerationService::class);
+        $mock = $this->mock(AiGenerationService::class);
         $mock->shouldReceive('forUser')->andReturnSelf();
         $mock->shouldReceive('forFeature')->andReturnSelf();
         $mock->shouldReceive('getModel')->andReturn('gemma-4-26b-a4b-it');
@@ -106,7 +106,7 @@ class GenerationTest extends TestCase
         $feature = $this->createFeatureWithProject();
         $brd = $this->createApprovedDraft($feature, 'brd');
 
-        $mock = $this->mock(GeminiGenerationService::class);
+        $mock = $this->mock(AiGenerationService::class);
         $mock->shouldReceive('forUser')->andReturnSelf();
         $mock->shouldReceive('forFeature')->andReturnSelf();
         $mock->shouldReceive('getModel')->andReturn('gemma-4-26b-a4b-it');
@@ -131,7 +131,7 @@ class GenerationTest extends TestCase
         $brd = $this->createApprovedDraft($feature, 'brd');
         $stories = $this->createApprovedDraft($feature, 'stories');
 
-        $mock = $this->mock(GeminiGenerationService::class);
+        $mock = $this->mock(AiGenerationService::class);
         $mock->shouldReceive('forUser')->andReturnSelf();
         $mock->shouldReceive('forFeature')->andReturnSelf();
         $mock->shouldReceive('getModel')->andReturn('gemma-4-26b-a4b-it');

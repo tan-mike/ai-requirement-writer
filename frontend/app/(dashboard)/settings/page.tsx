@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { apiClient } from '@/lib/api'
 import GuidedTour from '@/components/GuidedTour'
 import { useNotifications } from '@/lib/notifications'
@@ -12,10 +12,40 @@ interface CustomSkill {
   created_at: string
 }
 
+interface AiProvider {
+  id: string
+  label: string
+  base_url: string
+  default_model: string
+}
+
+interface UserSettingsResponse {
+  free_tier: boolean
+  ai_api_key?: string | null
+  ai_base_url?: string | null
+  ai_model?: string | null
+  platform_model?: string
+  default_provider?: string
+  providers?: AiProvider[]
+}
+
+const CUSTOM_PROVIDER = 'custom'
+
+const trimSlash = (url: string) => url.trim().replace(/\/+$/, '')
+
 export default function SettingsPage() {
   const { showAlert, showConfirm } = useNotifications()
   const [freeTier, setFreeTier] = useState(false)
-  const [geminiApiKey, setGeminiApiKey] = useState('')
+  const [aiApiKey, setAiApiKey] = useState('')
+  const [providers, setProviders] = useState<AiProvider[]>([])
+  const [providerId, setProviderId] = useState('gemini')
+  const [customBaseUrl, setCustomBaseUrl] = useState('')
+  const [aiModel, setAiModel] = useState('')
+  const [platformModel, setPlatformModel] = useState('')
+  const [models, setModels] = useState<string[]>([])
+  const [modelsStatus, setModelsStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
+  const [modelsError, setModelsError] = useState('')
+  const modelsRequestId = useRef(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
@@ -25,15 +55,72 @@ export default function SettingsPage() {
 
   useEffect(() => {
     Promise.all([
-      apiClient.get<{ data: { free_tier: boolean, gemini_api_key?: string } }>('/user/settings'),
+      apiClient.get<{ data: UserSettingsResponse }>('/user/settings'),
       apiClient.get<{ data: CustomSkill[] }>('/user/skills')
     ]).then(([settingsRes, skillsRes]) => {
       setFreeTier(settingsRes.data.free_tier)
-      setGeminiApiKey(settingsRes.data.gemini_api_key ?? '')
+      setAiApiKey(settingsRes.data.ai_api_key ?? '')
+      const presets = settingsRes.data.providers ?? []
+      const savedUrl = settingsRes.data.ai_base_url
+      const match = savedUrl ? presets.find(p => trimSlash(p.base_url) === trimSlash(savedUrl)) : undefined
+      setProviders(presets)
+      if (!savedUrl) {
+        setProviderId(settingsRes.data.default_provider ?? presets[0]?.id ?? 'gemini')
+      } else if (match) {
+        setProviderId(match.id)
+      } else {
+        setProviderId(CUSTOM_PROVIDER)
+        setCustomBaseUrl(savedUrl)
+      }
+      if (settingsRes.data.ai_api_key) {
+        const initialProvider = !savedUrl ? (settingsRes.data.default_provider ?? presets[0]?.id ?? 'gemini') : (match?.id ?? CUSTOM_PROVIDER)
+        loadModels(initialProvider, savedUrl ?? '', settingsRes.data.ai_api_key)
+      }
+      setAiModel(settingsRes.data.ai_model ?? '')
+      setPlatformModel(settingsRes.data.platform_model ?? '')
       setPersonas(skillsRes.data)
       setLoading(false)
     })
   }, [])
+
+  const selectedPreset = providers.find(p => p.id === providerId)
+
+  // Fetch the provider's chat models through the backend (keeps the key off the browser-to-provider path).
+  async function loadModels(provider: string, baseUrl: string, apiKey: string) {
+    const requestId = ++modelsRequestId.current
+    if (provider === CUSTOM_PROVIDER && !baseUrl.trim()) {
+      setModels([])
+      setModelsStatus('idle')
+      return
+    }
+    setModelsStatus('loading')
+    setModelsError('')
+    try {
+      const res = await apiClient.post<{ data: string[] }>('/user/ai/models', {
+        provider,
+        base_url: provider === CUSTOM_PROVIDER ? baseUrl.trim() : undefined,
+        api_key: apiKey || undefined,
+      })
+      if (requestId !== modelsRequestId.current) return
+      setModels(res.data)
+      setModelsStatus('loaded')
+    } catch (err) {
+      if (requestId !== modelsRequestId.current) return
+      setModels([])
+      setModelsStatus('error')
+      setModelsError(err instanceof Error ? err.message : 'Could not load models.')
+    }
+  }
+
+  function handleProviderChange(id: string) {
+    setProviderId(id)
+    // Model names differ per provider, so suggest the new provider's default.
+    const preset = providers.find(p => p.id === id)
+    setAiModel(preset?.default_model ?? '')
+    loadModels(id, customBaseUrl, aiApiKey)
+  }
+
+  const refreshModels = () => loadModels(providerId, customBaseUrl, aiApiKey)
 
   async function handleSaveSettings() {
     setSaving(true)
@@ -41,11 +128,14 @@ export default function SettingsPage() {
     try {
       await apiClient.patch('/user/settings', { 
         free_tier: freeTier,
-        gemini_api_key: geminiApiKey || null
+        ai_api_key: aiApiKey || null,
+        ai_base_url: providerId === CUSTOM_PROVIDER ? (customBaseUrl.trim() || null) : (selectedPreset?.base_url ?? null),
+        ai_model: aiModel.trim() || null
       })
       setMessage('Settings saved successfully.')
-    } catch {
-      setMessage('Failed to save settings.')
+    } catch (err) {
+      const detail = err instanceof Error && err.message ? ` ${err.message}` : ''
+      setMessage(`Failed to save settings.${detail}`)
     } finally {
       setSaving(false)
     }
@@ -95,18 +185,91 @@ export default function SettingsPage() {
         <div className="bg-card border border-border rounded-2xl p-8 space-y-8 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-2" id="tour-api-keys">
-              <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Personal Gemini API Key</label>
+              <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Personal AI API Key</label>
               <input 
                 type="password" 
                 className="input" 
-                placeholder="AIzaSy..." 
-                value={geminiApiKey}
-                onChange={e => setGeminiApiKey(e.target.value)}
+                placeholder="sk-... or AIzaSy..." 
+                value={aiApiKey}
+                onChange={e => setAiApiKey(e.target.value)}
+                onBlur={refreshModels}
               />
               <p className="text-[10px] text-muted-foreground leading-relaxed">
-                Optional. If blank, the platform's shared API key will be used. 
+                Optional. If blank, the platform&apos;s shared API key and model will be used.
                 Your key is stored with AES-256 encryption.
               </p>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="ai-provider" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">AI Provider</label>
+              <select
+                id="ai-provider"
+                className="input"
+                value={providerId}
+                onChange={e => handleProviderChange(e.target.value)}
+              >
+                {providers.map(p => (
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+                <option value={CUSTOM_PROVIDER}>Custom (OpenAI-compatible)</option>
+              </select>
+              {providerId === CUSTOM_PROVIDER ? (
+                <input
+                  type="url"
+                  className="input"
+                  aria-label="Custom provider base URL"
+                  placeholder="https://your-provider.example.com/v1"
+                  value={customBaseUrl}
+                  onChange={e => setCustomBaseUrl(e.target.value)}
+                  onBlur={refreshModels}
+                />
+              ) : (
+                selectedPreset && (
+                  <p className="text-[10px] text-muted-foreground font-mono break-all">{selectedPreset.base_url}</p>
+                )
+              )}
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                Used only with your personal key. Custom endpoints must be public https URLs.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label htmlFor="ai-model" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Model</label>
+                <button
+                  type="button"
+                  onClick={refreshModels}
+                  disabled={modelsStatus === 'loading'}
+                  className="text-[10px] font-bold text-primary hover:underline disabled:opacity-50"
+                >
+                  {modelsStatus === 'loading' ? 'Loading models...' : 'Refresh models'}
+                </button>
+              </div>
+              <input 
+                id="ai-model"
+                type="text" 
+                className="input" 
+                list="ai-model-options"
+                autoComplete="off" 
+                placeholder={selectedPreset?.default_model ?? (platformModel ? `Platform default: ${platformModel}` : 'Model name')} 
+                value={aiModel}
+                onChange={e => setAiModel(e.target.value)}
+              />
+              <datalist id="ai-model-options">
+                {models.map(m => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+              {modelsStatus === 'error' ? (
+                <p className="text-[10px] text-red-600 leading-relaxed">{modelsError} You can still type a model name.</p>
+              ) : (
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  {modelsStatus === 'loaded'
+                    ? `${models.length} models available. Pick from the list or type a name.`
+                    : 'Model name as your provider expects it. Enter your API key to load the list.'}
+                  {' '}Used only with your personal key.
+                </p>
+              )}
             </div>
 
             <div className="flex items-center justify-between p-4 bg-muted/20 rounded-xl border border-border/50">
@@ -194,7 +357,7 @@ export default function SettingsPage() {
           {
             targetId: "tour-api-keys",
             title: "Manage Keys",
-            content: "Add your personal Gemini API key here to use your own quota."
+            content: "Add your personal API key and choose an AI provider and model to use your own quota."
           },
           {
             targetId: "tour-custom-skills",

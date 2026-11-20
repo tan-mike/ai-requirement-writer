@@ -8,7 +8,7 @@ use App\Models\Persona;
 use App\Models\Project;
 use App\Models\RequirementDraft;
 use App\Models\User;
-use App\Services\GeminiGenerationService;
+use App\Services\AiGenerationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Tests\TestCase;
@@ -74,7 +74,7 @@ class AgenticPersonaTest extends TestCase
         ]);
         $feature->intake()->create(['fields' => ['test' => 'data']]);
 
-        $mock = $this->mock(GeminiGenerationService::class);
+        $mock = $this->mock(AiGenerationService::class);
         $mock->shouldReceive('forUser')->andReturnSelf();
         $mock->shouldReceive('forFeature')->andReturnSelf();
         $mock->shouldReceive('getModel')->andReturn('gemma-4-26b-a4b-it');
@@ -118,7 +118,7 @@ class AgenticPersonaTest extends TestCase
             'lead_persona_id' => $this->lead->id,
         ]);
 
-        $mock = $this->mock(GeminiGenerationService::class);
+        $mock = $this->mock(AiGenerationService::class);
         $mock->shouldReceive('forUser')->andReturnSelf();
         $mock->shouldReceive('forFeature')->andReturnSelf();
         $mock->shouldReceive('streamSynthesis')

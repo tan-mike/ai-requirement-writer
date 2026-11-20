@@ -4,13 +4,13 @@ namespace Tests\Unit;
 
 use App\Models\ProjectContext;
 use App\Models\User;
-use App\Services\GeminiGenerationService;
+use App\Services\AiGenerationService;
 use App\Services\MemoryGovernorService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 use ReflectionMethod;
 
-class GeminiGenerationServiceContextTest extends TestCase
+class AiGenerationServiceContextTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -25,9 +25,9 @@ class GeminiGenerationServiceContextTest extends TestCase
             'is_global' => true,
         ]);
 
-        $service = app(GeminiGenerationService::class);
+        $service = app(AiGenerationService::class);
         
-        $method = new ReflectionMethod(GeminiGenerationService::class, 'getCompanyContext');
+        $method = new ReflectionMethod(AiGenerationService::class, 'getCompanyContext');
         $method->setAccessible(true);
         $result = $method->invoke($service);
 
@@ -49,10 +49,10 @@ class GeminiGenerationServiceContextTest extends TestCase
 
         $project->projectContexts()->attach($context->id);
 
-        $service = app(GeminiGenerationService::class);
+        $service = app(AiGenerationService::class);
         $service->forUser($user, $project);
         
-        $method = new ReflectionMethod(GeminiGenerationService::class, 'getModuleContexts');
+        $method = new ReflectionMethod(AiGenerationService::class, 'getModuleContexts');
         $method->setAccessible(true);
         $result = $method->invoke($service);
 
