@@ -90,6 +90,8 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/user/me', \App\Http\Controllers\UserMeController::class);
     Route::get('/user/settings', [\App\Http\Controllers\UserSettingsController::class, 'show']);
     Route::patch('/user/settings', [\App\Http\Controllers\UserSettingsController::class, 'update']);
+    Route::post('/user/ai/models', [\App\Http\Controllers\UserSettingsController::class, 'models'])
+        ->middleware('throttle:20,1');
 
     // Scoring rubric config
     Route::get('/scoring-config', \App\Http\Controllers\ScoringConfigController::class);

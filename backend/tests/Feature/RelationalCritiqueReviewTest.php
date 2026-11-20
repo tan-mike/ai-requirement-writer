@@ -8,7 +8,7 @@ use App\Models\Persona;
 use App\Models\Project;
 use App\Models\RequirementDraft;
 use App\Models\User;
-use App\Services\GeminiGenerationService;
+use App\Services\AiGenerationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -90,7 +90,7 @@ class RelationalCritiqueReviewTest extends TestCase
             'status' => 'completed',
         ]);
 
-        $mock = $this->mock(GeminiGenerationService::class);
+        $mock = $this->mock(AiGenerationService::class);
         $mock->shouldReceive('forUser')->andReturnSelf();
         $mock->shouldReceive('forFeature')->andReturnSelf();
         

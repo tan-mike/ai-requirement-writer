@@ -25,7 +25,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'role',
         'free_tier',
-        'gemini_api_key',
+        'ai_api_key',
+        'ai_base_url',
+        'ai_model',
         'tour_flags',
         'current_team_id',
         'email_verified_at',
@@ -35,7 +37,7 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $hidden = [
         'password',
         'remember_token',
-        'gemini_api_key'
+        'ai_api_key',
     ];
 
     /**
@@ -58,7 +60,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'free_tier' => 'boolean',
-            'gemini_api_key' => 'encrypted',
+            'ai_api_key' => 'encrypted',
             'tour_flags' => 'array',
             'current_team_id' => 'integer',
         ];

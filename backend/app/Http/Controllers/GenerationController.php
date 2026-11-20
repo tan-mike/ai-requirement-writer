@@ -7,13 +7,13 @@ use App\Models\Persona;
 use App\Models\Feature;
 use App\Models\ProjectContext;
 use App\Models\RequirementDraft;
-use App\Services\GeminiGenerationService;
+use App\Services\AiGenerationService;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class GenerationController extends Controller
 {
-    public function __construct(private GeminiGenerationService $gemini) {}
+    public function __construct(private AiGenerationService $ai) {}
 
     public function brd(Request $request, Feature $feature): StreamedResponse
     {
@@ -46,7 +46,7 @@ class GenerationController extends Controller
         ]);
 
         try {
-            $this->gemini->forUser($request->user())->forFeature($feature);
+            $this->ai->forUser($request->user())->forFeature($feature);
         } catch (\RuntimeException $e) {
             abort(422, $e->getMessage());
         }
@@ -91,7 +91,7 @@ class GenerationController extends Controller
             'lead_persona_id' => $leadPersona->id,
             'reviewer_persona_ids' => $reviewers->pluck('id')->toArray(),
             'context_ids' => $contexts->pluck('id')->values()->all(),
-            'model' => $this->gemini->getModel(),
+            'model' => $this->ai->getModel(),
         ]);
 
         return response()->stream(function () use ($feature, $draft, $leadPersona, $reviewers, $contexts, $type, $request) {
@@ -108,14 +108,14 @@ class GenerationController extends Controller
                 if ($type === 'brd') {
                     $intake = $feature->intake?->fields ?? [];
                     $chatHistory = $feature->chatMessages()->orderBy('created_at')->get()->toArray();
-                    $this->gemini->streamBrd($leadPersona->system_prompt, $intake, $chatHistory, $contexts->toArray(), $onChunk, $draft);
+                    $this->ai->streamBrd($leadPersona->system_prompt, $intake, $chatHistory, $contexts->toArray(), $onChunk, $draft);
                 } elseif ($type === 'stories') {
                     $brd = RequirementDraft::findOrFail($request->brd_draft_id)->content;
-                    $this->gemini->streamStories($leadPersona->system_prompt, $brd, $contexts->toArray(), $onChunk, $draft);
+                    $this->ai->streamStories($leadPersona->system_prompt, $brd, $contexts->toArray(), $onChunk, $draft);
                 } elseif ($type === 'spec') {
                     $brd = RequirementDraft::findOrFail($request->brd_draft_id)->content;
                     $stories = RequirementDraft::findOrFail($request->stories_draft_id)->content;
-                    $this->gemini->streamSpec($leadPersona->system_prompt, $brd, $stories, $contexts->toArray(), $onChunk, $draft);
+                    $this->ai->streamSpec($leadPersona->system_prompt, $brd, $stories, $contexts->toArray(), $onChunk, $draft);
                 }
 
                 $draft->update(['content' => $accumulated]);
@@ -164,7 +164,7 @@ class GenerationController extends Controller
         set_time_limit(0);
 
         try {
-            $this->gemini->forUser($request->user())->forFeature($feature);
+            $this->ai->forUser($request->user())->forFeature($feature);
         } catch (\RuntimeException $e) {
             abort(422, $e->getMessage());
         }
@@ -178,7 +178,7 @@ class GenerationController extends Controller
                     ->pluck('content', 'persona.name')
                     ->toArray();
 
-                $this->gemini->streamSynthesis(
+                $this->ai->streamSynthesis(
                     $leadPersona->system_prompt,
                     $draft->content,
                     $critiques,

@@ -9,7 +9,7 @@ use App\Models\Persona;
 use App\Models\Project;
 use App\Models\RequirementDraft;
 use App\Models\User;
-use App\Services\GeminiGenerationService;
+use App\Services\AiGenerationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -40,15 +40,15 @@ class ProcessCritiqueJobTest extends TestCase
             'system_prompt' => 'Review it.',
         ]);
 
-        $mockGemini = $this->mock(GeminiGenerationService::class);
-        $mockGemini->shouldReceive('forUser')->andReturnSelf();
-        $mockGemini->shouldReceive('forFeature')->andReturnSelf();
-        $mockGemini->shouldReceive('generateCritique')
+        $mockAi = $this->mock(AiGenerationService::class);
+        $mockAi->shouldReceive('forUser')->andReturnSelf();
+        $mockAi->shouldReceive('forFeature')->andReturnSelf();
+        $mockAi->shouldReceive('generateCritique')
             ->once()
             ->andReturn('Test critique content');
 
         $job = new ProcessCritiqueJob($draft, $reviewer);
-        $job->handle($mockGemini);
+        $job->handle($mockAi);
 
         $this->assertDatabaseHas('draft_critiques', [
             'requirement_draft_id' => $draft->id,
@@ -96,14 +96,14 @@ class ProcessCritiqueJobTest extends TestCase
             'status' => 'completed',
         ]);
 
-        $mockGemini = $this->mock(GeminiGenerationService::class);
-        $mockGemini->shouldReceive('forUser')->andReturnSelf();
-        $mockGemini->shouldReceive('forFeature')->andReturnSelf();
-        $mockGemini->shouldReceive('generateCritique')
+        $mockAi = $this->mock(AiGenerationService::class);
+        $mockAi->shouldReceive('forUser')->andReturnSelf();
+        $mockAi->shouldReceive('forFeature')->andReturnSelf();
+        $mockAi->shouldReceive('generateCritique')
             ->andReturn('Second critique content');
 
         $job = new ProcessCritiqueJob($draft, $reviewer2);
-        $job->handle($mockGemini);
+        $job->handle($mockAi);
 
         $this->assertEquals('refining', $draft->fresh()->status);
     }

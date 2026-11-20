@@ -4,7 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Persona;
 use App\Models\RequirementDraft;
-use App\Services\GeminiGenerationService;
+use App\Services\AiGenerationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -21,21 +21,21 @@ class ProcessCritiqueJob implements ShouldQueue
         public Persona $reviewer
     ) {}
 
-    public function handle(GeminiGenerationService $gemini): void
+    public function handle(AiGenerationService $ai): void
     {
         set_time_limit(0); // Prevent premature killing
 
         $feature = $this->draft->feature;
 
         try {
-            $gemini->forUser($this->draft->user, $feature->project)->forFeature($feature);
+            $ai->forUser($this->draft->user, $feature->project)->forFeature($feature);
         } catch (\RuntimeException $e) {
             // No API key — fail immediately without retrying
             $this->fail($e);
             return;
         }
 
-        $critiqueContent = $gemini->generateCritique(
+        $critiqueContent = $ai->generateCritique(
             $this->reviewer->system_prompt,
             $this->draft->content,
             $this->draft->type

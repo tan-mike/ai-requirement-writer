@@ -4,14 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Feature;
 use App\Models\ChatMessage;
-use App\Services\GeminiGenerationService;
+use App\Services\AiGenerationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ChatController extends Controller
 {
-    public function __construct(private GeminiGenerationService $gemini) {}
+    public function __construct(private AiGenerationService $ai) {}
 
     public function index(Feature $feature): JsonResponse
     {
@@ -43,7 +43,7 @@ class ChatController extends Controller
         set_time_limit(0);
 
         try {
-            $this->gemini->forUser($user)->forFeature($feature);
+            $this->ai->forUser($user)->forFeature($feature);
         } catch (\RuntimeException $e) {
             abort(422, $e->getMessage());
         }
@@ -58,7 +58,7 @@ class ChatController extends Controller
                 $accumulated = '';
                 $history = $feature->chatMessages()->orderBy('created_at')->get()->toArray();
                 
-                $this->gemini->streamDiscoveryChat(
+                $this->ai->streamDiscoveryChat(
                     $leadPersona->system_prompt,
                     $feature->project->architecture_summary ?? '',
                     $history,

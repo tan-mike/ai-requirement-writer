@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Project;
-use App\Services\GeminiGenerationService;
+use App\Services\AiGenerationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\File;
@@ -19,7 +19,7 @@ class ProcessRepositoryJob implements ShouldQueue
     {
     }
 
-    public function handle(GeminiGenerationService $gemini): void
+    public function handle(AiGenerationService $ai): void
     {
         try {
             $targetPath = $this->project->repository_path;
@@ -43,7 +43,7 @@ class ProcessRepositoryJob implements ShouldQueue
             }
 
             $context = $this->extractContext($targetPath);
-            $summary = $gemini->generateArchitectureSummary($context);
+            $summary = $ai->generateArchitectureSummary($context);
 
             $this->project->update([
                 'architecture_summary' => $summary,
