@@ -1,6 +1,6 @@
 # AI Requirement Writer
 
-Automated tool to generate Business Requirements Documents (BRD), User Stories, and Technical Specifications using Google Gemini 2.0.
+Automated tool to generate Business Requirements Documents (BRD), User Stories, and Technical Specifications using any OpenAI-compatible AI provider (Google Gemini by default).
 
 ## 🌟 The Agentic Architecture
 
@@ -19,7 +19,7 @@ This system is an **Agentic AI Architect** designed for continuous product evolu
 
 - **Backend:** Laravel 11 (PHP 8.3)
 - **Frontend:** Next.js 15 (React 19, TypeScript)
-- **AI:** Google Gemini 2.0 Flash
+- **AI:** Any OpenAI-compatible Chat Completions provider (Gemini, OpenAI, OpenRouter, Groq, Ollama...), configured with `AI_BASE_URL`, `AI_API_KEY` and `AI_MODEL`
 - **Database:** MySQL 8.0
 
 ---
@@ -43,7 +43,7 @@ Builds the entire stack into a single container for easy local testing.
    docker build -t ai-requirement-writer .
    docker run -it --rm -p 8080:80 --name ai-app --network ai-writer-net \
      -e DB_CONNECTION=mysql -e DB_HOST=ai-db -e DB_DATABASE=ai_writer -e DB_USERNAME=root -e DB_PASSWORD=root_pass \
-     -e GEMINI_API_KEY=your_key \
+     -e AI_API_KEY=your_key \
      -e GOOGLE_DRIVE_CONTEXTS_FOLDER_ID=your_id \
      ai-requirement-writer
    ```

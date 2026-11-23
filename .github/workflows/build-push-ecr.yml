@@ -90,6 +90,8 @@ jobs:
           context: .
           file: ${{ inputs.dockerfile }}
           push: true
+          # Always pull the latest base images so OS security fixes are picked up
+          pull: true
           tags: ${{ inputs.ecr-repository }}:latest
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |

@@ -6,7 +6,7 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
-        "php": "8.3.31",
+        "php": "8.3.37",
         "doctrine/dbal": "^4.4",
         "google/apiclient": "^2.19",
         "laravel/framework": "^11.9",
@@ -81,7 +81,7 @@
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true,
-        "platform": {"php": "8.3.31"},
+        "platform": {"php": "8.3.37"},
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true

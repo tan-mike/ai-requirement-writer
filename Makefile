@@ -101,7 +101,7 @@ ecr-login:
 
 .PHONY: push-ecr
 push-ecr:
-	docker build --platform linux/amd64 -t $(IMAGE_NAME) -f docker/Dockerfile .
+	docker build --pull --platform linux/amd64 -t $(IMAGE_NAME) -f docker/Dockerfile .
 	docker tag $(IMAGE_NAME):latest $(FULL_IMAGE_TAG)
 	docker push $(FULL_IMAGE_TAG)
 
